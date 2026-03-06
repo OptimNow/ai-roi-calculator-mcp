@@ -105,6 +105,8 @@ function ROIDashboard() {
         currentVolume={results.effectiveMonthlyVolume}
         breakEvenVolume={results.breakEvenVolume}
         unitName={inputs.unitName}
+        paybackMonths={results.paybackMonths}
+        analysisHorizonMonths={horizonMonths}
       />
 
       <Panel title="ROI Curve: Cumulative Profit Over Time">
@@ -227,11 +229,15 @@ function BreakEvenBanner({
   currentVolume,
   breakEvenVolume,
   unitName,
+  paybackMonths,
+  analysisHorizonMonths,
 }: {
   isReached: boolean;
   currentVolume: number;
   breakEvenVolume?: number;
   unitName: string;
+  paybackMonths: number | string;
+  analysisHorizonMonths: number;
 }) {
   if (breakEvenVolume === undefined) {
     return (
@@ -254,12 +260,16 @@ function BreakEvenBanner({
     >
       <div style={{ fontSize: "24px", fontWeight: 700, marginBottom: "6px" }}>{isReached ? "Above Break-even" : "Below Break-even"}</div>
       <div style={{ fontSize: "15px", lineHeight: 1.4 }}>
-        Current volume of <strong>{currentVolume.toLocaleString()}</strong> {unitName}s/mo. Break-even threshold: <strong>{breakEvenVolume.toLocaleString()}</strong> {unitName}s/mo.
+        Current volume of <strong>{currentVolume.toLocaleString()}</strong> {unitName}s/mo. Unit break-even threshold: <strong>{breakEvenVolume.toLocaleString()}</strong> {unitName}s/mo.
       </div>
+      {isPaybackBeyondHorizon(paybackMonths, analysisHorizonMonths) && (
+        <div style={{ marginTop: "6px", fontSize: "12px", color: "#334155" }}>
+          Cumulative payback is about {String(paybackMonths)} months, beyond the {analysisHorizonMonths}-month chart window.
+        </div>
+      )}
     </div>
   );
 }
-
 function Panel({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div style={{ border: "1px solid #d6dbe3", borderRadius: "10px", padding: "14px", marginBottom: "16px" }}>
@@ -280,11 +290,10 @@ function ProfitCurveChart({
   const height = 260;
   const padding = { top: 16, right: 20, bottom: 40, left: 78 };
   const xMax = points[points.length - 1]?.month ?? 12;
-  const rawMinY = Math.min(...points.map((p) => p.value), 0);
-  const rawMaxY = Math.max(...points.map((p) => p.value), 0);
-  const yPad = Math.max((rawMaxY - rawMinY) * 0.12, 100);
-  const minY = rawMinY - yPad;
-  const maxY = rawMaxY + yPad;
+  const rawMinY = Math.min(...points.map((p) => p.value));
+  const rawMaxY = Math.max(...points.map((p) => p.value));
+  const minY = computeChartMinY(rawMinY, rawMaxY);
+  const maxY = computeChartMaxY(rawMinY, rawMaxY);
   const ySpan = Math.max(maxY - minY, 1);
   const toX = (month: number) => padding.left + (month / xMax) * (width - padding.left - padding.right);
   const toY = (value: number) => padding.top + ((maxY - value) / ySpan) * (height - padding.top - padding.bottom);
@@ -520,6 +529,10 @@ function toBreakEvenMonth(payback: number | string): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+function isPaybackBeyondHorizon(payback: number | string, horizon: number): boolean {
+  const month = toBreakEvenMonth(payback);
+  return month !== undefined && month > horizon;
+}
 function formatCompact(value: number): string {
   const abs = Math.abs(value);
   if (abs >= 1_000_000) {
@@ -542,15 +555,48 @@ function formatAxisMoney(value: number): string {
   const abs = Math.abs(value);
   const sign = value < 0 ? "-" : "";
   if (abs >= 1_000_000) {
-    return `${sign}${(abs / 1_000_000).toFixed(1)}m`;
+    return `${sign}$${(abs / 1_000_000).toFixed(1)}m`;
   }
   if (abs >= 1_000) {
-    return `${sign}${(abs / 1_000).toFixed(1)}k`;
+    return `${sign}$${(abs / 1_000).toFixed(1)}k`;
   }
-  return `${sign}${abs.toFixed(0)}`;
+  return `${sign}$${abs.toFixed(0)}`;
+}
+function computeChartMinY(rawMinY: number, rawMaxY: number): number {
+  if (rawMinY >= 0) {
+    return 0;
+  }
+  if (rawMaxY <= 0) {
+    return rawMinY - Math.max(Math.abs(rawMinY) * 0.08, 100);
+  }
+  const span = rawMaxY - rawMinY;
+  return rawMinY - Math.max(span * 0.1, 100);
+}
+
+function computeChartMaxY(rawMinY: number, rawMaxY: number): number {
+  if (rawMaxY <= 0) {
+    return 0;
+  }
+  if (rawMinY >= 0) {
+    return rawMaxY + Math.max(Math.abs(rawMaxY) * 0.08, 100);
+  }
+  const span = rawMaxY - rawMinY;
+  return rawMaxY + Math.max(span * 0.1, 100);
 }
 export default ROIDashboard;
 mountWidget(<ROIDashboard />);
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
