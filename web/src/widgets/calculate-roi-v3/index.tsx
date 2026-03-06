@@ -49,6 +49,7 @@ function ROIDashboard() {
     ? results.monthlyCashNetBenefit
     : results.netMonthlyBenefit + results.monthlyAmortizedFixedCost;
   const curvePoints = buildProfitCurvePoints(results.totalFixedCost, monthlyCashForCurve, horizonMonths);
+
   const harnessCostPerUnit = Math.max(results.layer2CostPerUnit - results.layer1CostPerUnit, 0);
   const harnessMonthlyCost = Math.max(results.layer2MonthlyCost - results.layer1MonthlyCost, 0);
   const costSlices = [
@@ -115,6 +116,11 @@ function ROIDashboard() {
 
       <Panel title="ROI Curve: Cumulative Profit Over Time">
         <ProfitCurveChart points={curvePoints} breakEvenMonth={toBreakEvenMonth(results.paybackMonths)} />
+      </Panel>
+      <Panel title="Chart Diagnostics">
+        <div style={{ fontSize: "12px", color: "#475569" }}>
+          Widget version: <strong>v3.1</strong> | Points: <strong>{curvePoints.length}</strong> | Start: <strong>{formatAxisMoney(Number(curvePoints[0]?.value ?? 0))}</strong> | End: <strong>{formatAxisMoney(Number(curvePoints[curvePoints.length - 1]?.value ?? 0))}</strong> | Monthly cash: <strong>{formatAxisMoney(monthlyCashForCurve)}</strong>
+        </div>
       </Panel>
 
       <Panel title="Financial Overview">
@@ -592,6 +598,11 @@ function computeChartMaxY(rawMinY: number, rawMaxY: number): number {
 }
 export default ROIDashboard;
 mountWidget(<ROIDashboard />);
+
+
+
+
+
 
 
 
