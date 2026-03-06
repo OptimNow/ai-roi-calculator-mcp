@@ -1,0 +1,297 @@
+import { McpServer } from "skybridge/server";
+import { z } from "zod";
+import { calculateROI } from "./lib/calculations.js";
+import { PRESETS, DEFAULT_INPUTS } from "./lib/constants.js";
+import { ValueMethod } from "./lib/types.js";
+import type { SensitivityModifiers } from "./lib/types.js";
+
+// Reusable Zod schema for model parameters
+const modelParamsSchema = z.object({
+  avgInputTokensPerUnit: z.number().min(0).describe("Average input tokens per unit"),
+  avgOutputTokensPerUnit: z.number().min(0).describe("Average output tokens per unit"),
+  pricePer1MInputTokens: z.number().min(0).describe("Price per 1M input tokens (USD)"),
+  pricePer1MOutputTokens: z.number().min(0).describe("Price per 1M output tokens (USD)"),
+  costPerCall: z.number().min(0).describe("Flat cost per API call (alternative to token pricing)"),
+  useCallPricing: z.boolean().describe("Use per-call pricing instead of token-based"),
+});
+
+// Full input schema matching UseCaseInputs
+const useCaseInputSchema = z.object({
+  // General
+  useCaseName: z.string().default("AI Project"),
+  unitName: z.string().default("transaction"),
+  monthlyVolume: z.number().min(0).describe("Monthly transaction volume"),
+  successRate: z.number().min(0).max(100).default(95).describe("Success rate (0-100%)"),
+  analysisHorizonMonths: z.number().min(1).default(12),
+
+  // Fixed Costs
+  integrationCost: z.number().min(0).default(5000),
+  trainingTuningCost: z.number().min(0).default(2000),
+  changeManagementCost: z.number().min(0).default(1000),
+  amortizationMonths: z.number().min(1).default(12),
+
+  // Layer 1: Model
+  primaryModel: modelParamsSchema.default({
+    avgInputTokensPerUnit: 1000, avgOutputTokensPerUnit: 500,
+    pricePer1MInputTokens: 0.15, pricePer1MOutputTokens: 0.60,
+    costPerCall: 0.005, useCallPricing: false,
+  }),
+  secondaryModel: modelParamsSchema.default({
+    avgInputTokensPerUnit: 1000, avgOutputTokensPerUnit: 500,
+    pricePer1MInputTokens: 2.5, pricePer1MOutputTokens: 10,
+    costPerCall: 0.005, useCallPricing: false,
+  }),
+  routingSimplePercent: z.number().min(0).max(100).default(100),
+  cacheHitRate: z.number().min(0).max(100).default(10),
+  cachedTokenDiscount: z.number().min(0).max(100).default(90),
+
+  // Layer 2: Harness
+  orchestrationCostPerUnit: z.number().min(0).default(0.001),
+  retrievalCostPerUnit: z.number().min(0).default(0.002),
+  toolApiCostPerUnit: z.number().min(0).default(0),
+  loggingMonitoringCostPerUnit: z.number().min(0).default(0.0005),
+  safetyGuardrailsCostPerUnit: z.number().min(0).default(0.0005),
+  networkEgressCostPerUnit: z.number().min(0).default(0.0001),
+  storageCostPerUnit: z.number().min(0).default(0.0001),
+  retryRate: z.number().min(0).max(1).default(0.1),
+  overheadMultiplier: z.number().min(1).default(1.0),
+
+  // Layer 3: Value
+  valueMethod: z.nativeEnum(ValueMethod).default(ValueMethod.COST_DISPLACEMENT),
+
+  // Cost Displacement
+  baselineHumanCostPerUnit: z.number().min(0).default(5),
+  deflectionRate: z.number().min(0).max(100).default(40),
+  residualHumanReviewRate: z.number().min(0).max(100).default(10),
+  residualReviewCostPerUnit: z.number().min(0).default(2.5),
+
+  // Revenue Uplift
+  baselineConversionRate: z.number().min(0).max(100).default(2.5),
+  conversionUpliftAbsolute: z.number().min(0).default(0.5),
+  averageOrderValue: z.number().min(0).default(100),
+  grossMargin: z.number().min(0).max(100).default(60),
+
+  // Retention
+  baselineChurnRate: z.number().min(0).max(100).default(1.0),
+  churnReductionAbsolute: z.number().min(0).default(0.1),
+  annualValuePerCustomer: z.number().min(0).default(1200),
+  customersImpactedPerMonth: z.number().min(0).default(1000),
+
+  // Premium Monetization
+  pricePerSubscriberPerMonth: z.number().min(0).default(20),
+  subscribers: z.number().min(0).default(500),
+  nonAiCOGSPerSubscriber: z.number().min(0).default(2),
+});
+
+const server = new McpServer(
+  {
+    name: "ai-roi-calculator",
+    version: "1.0.0",
+  },
+  { capabilities: {} },
+);
+
+// ── Tool 1: Calculate ROI ─────────────────────────────────────────────
+server.registerWidget(
+  "calculate-roi",
+  {
+    description: "AI ROI Calculator — Interactive dashboard showing ROI metrics",
+  },
+  {
+    description:
+      "Calculate ROI for an AI/LLM implementation using a 3-layer cost framework. " +
+      "Returns ROI percentage, payback period, break-even volume, cost breakdown, and net benefit. " +
+      "Use 'load-preset' first to get recommended defaults for common use cases.",
+    inputSchema: useCaseInputSchema.shape,
+  },
+  async (inputs) => {
+    try {
+      const fullInputs = { ...DEFAULT_INPUTS, ...inputs };
+      const results = calculateROI(fullInputs);
+
+      return {
+        structuredContent: {
+          inputs: fullInputs,
+          results,
+        },
+        content: [
+          {
+            type: "text",
+            text: [
+              `## ${fullInputs.useCaseName} — ROI Analysis`,
+              ``,
+              `| Metric | Value |`,
+              `|--------|-------|`,
+              `| ROI | ${results.roiPercentage.toFixed(1)}% |`,
+              `| Monthly Volume | ${results.effectiveMonthlyVolume.toLocaleString()} ${fullInputs.unitName}s |`,
+              `| Monthly Cost | $${results.totalMonthlyCost.toFixed(2)} |`,
+              `| Monthly Value | $${results.totalMonthlyValue.toFixed(2)} |`,
+              `| Net Monthly Benefit | $${results.netMonthlyBenefit.toFixed(2)} |`,
+              `| Annualized Net Benefit | $${results.annualizedNetBenefit.toFixed(2)} |`,
+              `| Payback Period | ${results.paybackMonths} months |`,
+              `| Break-even Volume | ${results.breakEvenVolume !== undefined ? results.breakEvenVolume.toLocaleString() : "N/A"} ${fullInputs.unitName}s/month |`,
+              ``,
+              `### Cost Breakdown`,
+              `| Layer | Per Unit | Monthly |`,
+              `|-------|----------|---------|`,
+              `| L1 Infrastructure | $${results.layer1CostPerUnit.toFixed(6)} | $${results.layer1MonthlyCost.toFixed(2)} |`,
+              `| L2 Harness | $${results.layer2CostPerUnit.toFixed(6)} | $${results.layer2MonthlyCost.toFixed(2)} |`,
+              `| Fixed (amortized) | — | $${results.monthlyAmortizedFixedCost.toFixed(2)} |`,
+              ``,
+              `**Value Method:** ${fullInputs.valueMethod}`,
+            ].join("\n"),
+          },
+        ],
+        isError: false,
+      };
+    } catch (error) {
+      return {
+        content: [{ type: "text", text: `Calculation error: ${error}` }],
+        isError: true,
+      };
+    }
+  },
+);
+
+// ── Tool 2: Sensitivity Analysis ──────────────────────────────────────
+server.registerWidget(
+  "sensitivity-analysis",
+  {
+    description: "Sensitivity Analysis — Tornado chart showing variable impact on ROI",
+  },
+  {
+    description:
+      "Run sensitivity analysis on an AI ROI calculation. Tests ±20% changes to volume, " +
+      "success rate, costs, and value to show which variables have the most impact on ROI. " +
+      "Returns data for a tornado chart visualization.",
+    inputSchema: useCaseInputSchema.shape,
+  },
+  async (inputs) => {
+    try {
+      const fullInputs = { ...DEFAULT_INPUTS, ...inputs };
+      const baseline = calculateROI(fullInputs);
+
+      // Run ±20% on each variable
+      const variables: Array<{
+        name: string;
+        key: keyof SensitivityModifiers;
+      }> = [
+        { name: "Volume", key: "volumeMultiplier" },
+        { name: "Success Rate", key: "successRateMultiplier" },
+        { name: "Costs", key: "costMultiplier" },
+        { name: "Value", key: "valueMultiplier" },
+      ];
+
+      const analysis = variables.map((v) => {
+        const lowMod: SensitivityModifiers = {
+          volumeMultiplier: 1, successRateMultiplier: 1,
+          costMultiplier: 1, valueMultiplier: 1,
+          [v.key]: 0.8,
+        };
+        const highMod: SensitivityModifiers = {
+          volumeMultiplier: 1, successRateMultiplier: 1,
+          costMultiplier: 1, valueMultiplier: 1,
+          [v.key]: 1.2,
+        };
+
+        const lowResult = calculateROI(fullInputs, lowMod);
+        const highResult = calculateROI(fullInputs, highMod);
+
+        return {
+          variable: v.name,
+          low: lowResult.roiPercentage,
+          baseline: baseline.roiPercentage,
+          high: highResult.roiPercentage,
+          spread: Math.abs(highResult.roiPercentage - lowResult.roiPercentage),
+        };
+      });
+
+      // Sort by spread (most impactful first)
+      analysis.sort((a, b) => b.spread - a.spread);
+
+      return {
+        structuredContent: {
+          baseline: baseline.roiPercentage,
+          analysis,
+          inputs: fullInputs,
+        },
+        content: [
+          {
+            type: "text",
+            text: [
+              `## Sensitivity Analysis — ${fullInputs.useCaseName}`,
+              ``,
+              `Baseline ROI: ${baseline.roiPercentage.toFixed(1)}%`,
+              ``,
+              `| Variable | -20% ROI | +20% ROI | Spread |`,
+              `|----------|----------|----------|--------|`,
+              ...analysis.map(
+                (a) =>
+                  `| ${a.variable} | ${a.low.toFixed(1)}% | ${a.high.toFixed(1)}% | ${a.spread.toFixed(1)}pp |`,
+              ),
+              ``,
+              `**Most sensitive to:** ${analysis[0]?.variable ?? "N/A"}`,
+            ].join("\n"),
+          },
+        ],
+        isError: false,
+      };
+    } catch (error) {
+      return {
+        content: [{ type: "text", text: `Analysis error: ${error}` }],
+        isError: true,
+      };
+    }
+  },
+);
+
+// ── Tool 3: Load Preset ───────────────────────────────────────────────
+server.tool(
+  "load-preset",
+  "Load a preset configuration for a common AI use case. " +
+    "Available presets: support (Customer Support Bot), invoice (Invoice Processing), " +
+    "recommendation (E-commerce Recommendations), retention (Customer Retention AI), " +
+    "premium (AI Premium Features). Returns pre-filled inputs you can pass to calculate-roi.",
+  {
+    preset: z.enum(["support", "invoice", "recommendation", "retention", "premium"])
+      .describe("The preset use case to load"),
+  },
+  async ({ preset }) => {
+    const presetData = PRESETS[preset];
+    if (!presetData) {
+      return {
+        content: [{ type: "text", text: `Unknown preset: ${preset}` }],
+        isError: true,
+      };
+    }
+
+    const fullInputs = { ...DEFAULT_INPUTS, ...presetData };
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: [
+            `## Preset Loaded: ${fullInputs.useCaseName}`,
+            ``,
+            `| Setting | Value |`,
+            `|---------|-------|`,
+            `| Unit | ${fullInputs.unitName} |`,
+            `| Monthly Volume | ${fullInputs.monthlyVolume.toLocaleString()} |`,
+            `| Success Rate | ${fullInputs.successRate}% |`,
+            `| Value Method | ${fullInputs.valueMethod} |`,
+            `| Primary Model Input Tokens | ${fullInputs.primaryModel.avgInputTokensPerUnit} |`,
+            `| Primary Model Output Tokens | ${fullInputs.primaryModel.avgOutputTokensPerUnit} |`,
+            ``,
+            `You can now run \`calculate-roi\` with these defaults, or modify individual fields.`,
+          ].join("\n"),
+        },
+      ],
+      isError: false,
+    };
+  },
+);
+
+server.run();
+
+export type AppType = typeof server;
