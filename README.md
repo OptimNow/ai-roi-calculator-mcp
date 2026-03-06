@@ -1,90 +1,84 @@
-# AI ROI Calculator — MCP App
+# AI ROI Calculator - ChatGPT/MCP App
 
-An MCP (Model Context Protocol) app that calculates ROI for AI/LLM implementations using a 3-layer cost framework. Works as an interactive tool inside AI conversations on **Claude**, **ChatGPT**, **VS Code**, and other MCP-compatible clients.
+An ROI calculator app that runs as an MCP server with widget UIs, compatible with ChatGPT Apps and other MCP clients.
 
-Built by [OptimNow](https://www.optimnow.io) with the [Skybridge](https://docs.skybridge.tech/) framework.
+Built with [Skybridge](https://docs.skybridge.tech/) and deployed on [Alpic](https://alpic.ai/).
+
+## What changed for ChatGPT Apps
+
+This repo is already on the right architecture for ChatGPT Apps:
+- MCP tools with explicit input schemas (Zod)
+- Widget UI resources for interactive rendering
+- Tool + widget metadata for ChatGPT (`openai/outputTemplate`, widget CSP/domain metadata)
+
+With current Apps SDK guidance, you connect ChatGPT to the MCP endpoint (`/mcp`).
+A standalone `app.json` is not required for this Skybridge MCP setup.
 
 ## Tools
 
-| Tool | Description |
-|------|-------------|
-| `calculate-roi` | Calculate ROI for an AI project — returns ROI%, payback period, break-even volume, and cost breakdown |
-| `sensitivity-analysis` | Run ±20% sensitivity analysis on key variables to identify ROI risk factors |
-| `load-preset` | Load preset defaults for common use cases (support bot, invoice processing, etc.) |
+- `calculate-roi`: Calculate ROI and return dashboard metrics
+- `sensitivity-analysis`: Run +/-20% sensitivity analysis
+- `load-preset`: Load defaults for common AI use cases
 
-### 3-Layer Cost Framework
+## Project structure
 
-- **Layer 1 (Infrastructure):** Model inference costs — token pricing, cache optimization, multi-model routing
-- **Layer 2 (Harness):** Orchestration, retrieval, monitoring, tool APIs, operational overhead
-- **Layer 3 (Business Value):** Cost Displacement, Revenue Uplift, Retention Uplift, or Premium Monetization
+```text
+ai-roi-calculator-mcp/
+|- server/src/index.ts
+|- server/src/lib/
+|- web/src/widgets/calculate-roi/index.tsx
+|- web/src/widgets/sensitivity-analysis/index.tsx
+```
 
-### Presets
-
-Pre-configured defaults for common AI use cases:
-- Customer Support Bot
-- Invoice Processing
-- E-commerce Recommendations
-- Customer Retention AI
-- AI Premium Features
-
-## Getting Started
+## Local development
 
 ### Prerequisites
 
 - Node.js 24+
 
-### Install & Run
+### Run
 
 ```bash
 npm install
 npm run dev
 ```
 
-This starts the MCP server with Skybridge DevTools at `http://localhost:3000/`.
+Skybridge DevTools runs at `http://localhost:3000`.
+The MCP endpoint is `http://localhost:3000/mcp`.
 
-### Connect to Claude Desktop
+## Connect to ChatGPT (Developer Mode)
 
-Add to your `claude_desktop_config.json`:
+1. Start the app locally (`npm run dev`) or deploy it.
+2. Ensure ChatGPT Developer Mode is enabled:
+   - `Settings -> Apps & Connectors -> Advanced settings`
+3. In ChatGPT app setup, add your MCP server URL:
+   - Local tunnel example: `https://<your-tunnel-domain>/mcp`
+   - Deployed example: `https://<your-domain>/mcp`
+4. Refresh/reconnect after metadata changes.
+
+## Connect to Claude Desktop
 
 ```json
 {
   "mcpServers": {
     "ai-roi-calculator": {
       "command": "cmd",
-      "args": ["/c", "npx", "mcp-remote", "https://ai-roi-calculator-mc-e9dd36e7.alpic.live/"]
+      "args": ["/c", "npx", "mcp-remote", "https://ai-roi-calculator-mc-e9dd36e7.alpic.live/mcp"]
     }
   }
 }
 ```
 
-Restart Claude Desktop to connect.
-
-### Connect to ChatGPT
-
-1. Go to **Settings > Connected Apps**
-2. Add the MCP server URL: `https://ai-roi-calculator-mc-e9dd36e7.alpic.live/`
-3. ChatGPT will render interactive widget UIs for each tool
-
-### Example Prompts
-
-- "Load the support bot preset and calculate its ROI"
-- "Calculate ROI for an AI project with 10,000 monthly transactions"
-- "Run a sensitivity analysis on my AI implementation"
-
-## Deployment
-
-Deployed to [Alpic Cloud](https://alpic.ai/):
+## Build and deploy
 
 ```bash
+npm run build
+npm run start
 npx alpic deploy --yes --project-name ai-roi-calculator-mcp
 ```
 
-## Related
+## Notes
 
-- [AI ROI Calculator (standalone web app)](https://ai-roi-calculator.vercel.app) — the original interactive calculator
-- [Skybridge Documentation](https://docs.skybridge.tech/)
-- [MCP Protocol](https://modelcontextprotocol.io/)
-
-## License
-
-Private repository. All rights reserved.
+- The MCP route is `/mcp` (not root `/`).
+- Widget UIs are served automatically via Skybridge resource registration.
+- This app is read-only (calculation-only) and does not persist data.
