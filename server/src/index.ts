@@ -3,7 +3,6 @@ import { z } from "zod";
 import { calculateROI } from "./lib/calculations.js";
 import { PRESETS, DEFAULT_INPUTS } from "./lib/constants.js";
 import { ValueMethod } from "./lib/types.js";
-import type { SensitivityModifiers } from "./lib/types.js";
 
 const modelParamsSchema = z.object({
   avgInputTokensPerUnit: z.number().min(0).describe("Average input tokens per unit"),
@@ -30,7 +29,7 @@ const useCaseInputSchema = z.object({
     avgInputTokensPerUnit: 1000,
     avgOutputTokensPerUnit: 500,
     pricePer1MInputTokens: 0.15,
-    pricePer1MOutputTokens: 0.60,
+    pricePer1MOutputTokens: 0.6,
     costPerCall: 0.005,
     useCallPricing: false,
   }),
@@ -154,107 +153,6 @@ server.registerWidget(
     } catch (error) {
       return {
         content: [{ type: "text", text: `Calculation error: ${error}` }],
-        isError: true,
-      };
-    }
-  },
-);
-
-server.registerWidget(
-  "sensitivity-analysis",
-  {
-    description: "Sensitivity Analysis - Tornado chart showing variable impact on ROI",
-    _meta: {
-      ui: {
-        prefersBorder: true,
-      },
-    },
-  },
-  {
-    title: "Run sensitivity analysis",
-    description:
-      "Run sensitivity analysis on an AI ROI calculation. Tests +/-20% changes to volume, " +
-      "success rate, costs, and value to show which variables have the most impact on ROI. " +
-      "Returns data for a tornado chart visualization.",
-    inputSchema: useCaseInputSchema.shape,
-    annotations: readOnlyAnnotations,
-    _meta: {
-      "openai/toolInvocation/invoking": "Running sensitivity analysis",
-      "openai/toolInvocation/invoked": "Sensitivity analysis complete",
-    },
-  },
-  async (inputs) => {
-    try {
-      const fullInputs = { ...DEFAULT_INPUTS, ...inputs };
-      const baseline = calculateROI(fullInputs);
-
-      const variables: Array<{ name: string; key: keyof SensitivityModifiers }> = [
-        { name: "Volume", key: "volumeMultiplier" },
-        { name: "Success Rate", key: "successRateMultiplier" },
-        { name: "Costs", key: "costMultiplier" },
-        { name: "Value", key: "valueMultiplier" },
-      ];
-
-      const analysis = variables.map((v) => {
-        const lowMod: SensitivityModifiers = {
-          volumeMultiplier: 1,
-          successRateMultiplier: 1,
-          costMultiplier: 1,
-          valueMultiplier: 1,
-          [v.key]: 0.8,
-        };
-        const highMod: SensitivityModifiers = {
-          volumeMultiplier: 1,
-          successRateMultiplier: 1,
-          costMultiplier: 1,
-          valueMultiplier: 1,
-          [v.key]: 1.2,
-        };
-
-        const lowResult = calculateROI(fullInputs, lowMod);
-        const highResult = calculateROI(fullInputs, highMod);
-
-        return {
-          variable: v.name,
-          low: lowResult.roiPercentage,
-          baseline: baseline.roiPercentage,
-          high: highResult.roiPercentage,
-          spread: Math.abs(highResult.roiPercentage - lowResult.roiPercentage),
-        };
-      });
-
-      analysis.sort((a, b) => b.spread - a.spread);
-
-      return {
-        structuredContent: {
-          baseline: baseline.roiPercentage,
-          analysis,
-          inputs: fullInputs,
-        },
-        content: [
-          {
-            type: "text",
-            text: [
-              `## Sensitivity Analysis - ${fullInputs.useCaseName}`,
-              "",
-              `Baseline ROI: ${baseline.roiPercentage.toFixed(1)}%`,
-              "",
-              "| Variable | -20% ROI | +20% ROI | Spread |",
-              "|----------|----------|----------|--------|",
-              ...analysis.map(
-                (a) =>
-                  `| ${a.variable} | ${a.low.toFixed(1)}% | ${a.high.toFixed(1)}% | ${a.spread.toFixed(1)}pp |`,
-              ),
-              "",
-              `**Most sensitive to:** ${analysis[0]?.variable ?? "N/A"}`,
-            ].join("\n"),
-          },
-        ],
-        isError: false,
-      };
-    } catch (error) {
-      return {
-        content: [{ type: "text", text: `Analysis error: ${error}` }],
         isError: true,
       };
     }
