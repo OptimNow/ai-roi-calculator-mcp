@@ -50,7 +50,7 @@ export interface UseCaseInputs {
   safetyGuardrailsCostPerUnit: number;
   networkEgressCostPerUnit: number;
   storageCostPerUnit: number;
-  
+
   // L2 Multipliers
   retryRate: number; // 0-1.0 (e.g. 0.2 = 20%)
   overheadMultiplier: number; // e.g. 1.1 = 10% overhead
@@ -107,6 +107,7 @@ export interface CalculationResults {
   totalMonthlyValue: number;
 
   // ROI Metrics
+  monthlyCashNetBenefit: number; // Monthly value - monthly variable costs (excludes fixed-cost amortization)
   netMonthlyBenefit: number;
   annualizedNetBenefit: number;
   roiPercentage: number;

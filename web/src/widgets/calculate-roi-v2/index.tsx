@@ -16,6 +16,7 @@ interface ROIResults {
   grossValuePerUnit: number;
   netValuePerUnit: number;
   totalMonthlyValue: number;
+  monthlyCashNetBenefit: number;
   netMonthlyBenefit: number;
   annualizedNetBenefit: number;
   roiPercentage: number;
@@ -44,7 +45,7 @@ function ROIDashboard() {
   const confidence = getConfidenceLabel(inputs.successRate);
   const summary = getValueSummary(results, inputs.successRate);
   const horizonMonths = Math.max(1, Math.round(inputs.analysisHorizonMonths || 12));
-  const curvePoints = buildProfitCurvePoints(results.totalFixedCost, results.netMonthlyBenefit, horizonMonths);
+  const curvePoints = buildProfitCurvePoints(results.totalFixedCost, results.monthlyCashNetBenefit, horizonMonths);
   const harnessCostPerUnit = Math.max(results.layer2CostPerUnit - results.layer1CostPerUnit, 0);
   const harnessMonthlyCost = Math.max(results.layer2MonthlyCost - results.layer1MonthlyCost, 0);
   const costSlices = [
@@ -75,15 +76,15 @@ function ROIDashboard() {
           color={results.roiPercentage >= 0 ? "#84cc16" : "#dc2626"}
         />
         <KPICard
-          label="Net Benefit"
+          label="Net Benefit (P&L)"
           value={`$${formatCompact(results.netMonthlyBenefit)}`}
-          subtitle="Per month"
+          subtitle="after amortization"
           color={results.netMonthlyBenefit >= 0 ? "#16a34a" : "#dc2626"}
         />
         <KPICard
           label="Payback"
           value={`${results.paybackMonths}`}
-          subtitle="Months to recover"
+          subtitle="months to recover upfront fixed"
           color="#0f172a"
         />
         <KPICard
@@ -93,7 +94,7 @@ function ROIDashboard() {
           color="#0f172a"
         />
         <KPICard
-          label="Break-even"
+          label="Unit Break-even"
           value={results.breakEvenVolume !== undefined ? results.breakEvenVolume.toLocaleString() : "N/A"}
           subtitle={`${inputs.unitName}s/mo needed`}
           color="#0f172a"
@@ -258,7 +259,7 @@ function BreakEvenBanner({
         color: "#14532d",
       }}
     >
-      <div style={{ fontSize: "24px", fontWeight: 700, marginBottom: "6px" }}>{isReached ? "Above Break-even" : "Below Break-even"}</div>
+      <div style={{ fontSize: "24px", fontWeight: 700, marginBottom: "6px" }}>{isReached ? "Above Unit Break-even" : "Below Unit Break-even"}</div>
       <div style={{ fontSize: "15px", lineHeight: 1.4 }}>
         Current volume of <strong>{currentVolume.toLocaleString()}</strong> {unitName}s/mo. Unit break-even threshold: <strong>{breakEvenVolume.toLocaleString()}</strong> {unitName}s/mo.
       </div>
@@ -310,6 +311,9 @@ function ProfitCurveChart({
 
   const zeroY = toY(0);
   const areaD = `${pathD} L ${toX(xMax).toFixed(2)} ${zeroY.toFixed(2)} L ${toX(0).toFixed(2)} ${zeroY.toFixed(2)} Z`;
+  const allBelowZero = points.every((p) => p.value <= 0);
+  const allAboveZero = points.every((p) => p.value >= 0);
+  const areaFill = allBelowZero ? "rgba(239, 68, 68, 0.14)" : allAboveZero ? "rgba(34, 197, 94, 0.12)" : "rgba(99, 102, 241, 0.12)";
 
   return (
     <svg viewBox={`0 0 ${width} ${height}`} style={{ width: "100%", height: "auto" }} role="img" aria-label="Cumulative profit over time">
@@ -331,7 +335,7 @@ function ProfitCurveChart({
           </g>
         );
       })}
-      <path d={areaD} fill="rgba(34, 197, 94, 0.10)" />
+      <path d={areaD} fill={areaFill} />
       <rect
         x={padding.left}
         y={zeroY}
@@ -510,12 +514,12 @@ function getValueSummary(results: ROIResults, successRate: number): { grossPerUn
   return { grossPerUnit, realizedPerUnit };
 }
 
-function buildProfitCurvePoints(fixedCost: number, netMonthlyBenefit: number, horizonMonths: number): Array<{ month: number; value: number }> {
+function buildProfitCurvePoints(fixedCost: number, monthlyCashNetBenefit: number, horizonMonths: number): Array<{ month: number; value: number }> {
   const points: Array<{ month: number; value: number }> = [];
   for (let month = 0; month <= horizonMonths; month += 1) {
     points.push({
       month,
-      value: -fixedCost + netMonthlyBenefit * month,
+      value: -fixedCost + monthlyCashNetBenefit * month,
     });
   }
   return points;
@@ -585,6 +589,12 @@ function computeChartMaxY(rawMinY: number, rawMaxY: number): number {
 }
 export default ROIDashboard;
 mountWidget(<ROIDashboard />);
+
+
+
+
+
+
 
 
 

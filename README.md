@@ -16,9 +16,15 @@ A standalone `app.json` is not required for this Skybridge MCP setup.
 
 ## Tools
 
-- `calculate-roi`: Calculate ROI and return dashboard metrics
-- `sensitivity-analysis`: Run +/-20% sensitivity analysis
+- `calculate-roi-v2`: Calculate ROI and return dashboard metrics
 - `load-preset`: Load defaults for common AI use cases
+
+## Metric definitions
+
+- `Net Benefit (P&L)` = `Monthly Value - (Variable Monthly Cost + Fixed Cost Amortization)`
+- `Payback (months)` = `One-time Fixed Cost / (Monthly Value - Variable Monthly Cost)`
+- `ROI curve (cumulative profit)` uses the same cash-flow basis as payback:
+  `-One-time Fixed Cost + month * (Monthly Value - Variable Monthly Cost)`
 
 ## Project structure
 
@@ -26,8 +32,7 @@ A standalone `app.json` is not required for this Skybridge MCP setup.
 ai-roi-calculator-mcp/
 |- server/src/index.ts
 |- server/src/lib/
-|- web/src/widgets/calculate-roi/index.tsx
-|- web/src/widgets/sensitivity-analysis/index.tsx
+|- web/src/widgets/calculate-roi-v2/index.tsx
 ```
 
 ## Local development
