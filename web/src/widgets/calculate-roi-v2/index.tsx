@@ -45,7 +45,10 @@ function ROIDashboard() {
   const confidence = getConfidenceLabel(inputs.successRate);
   const summary = getValueSummary(results, inputs.successRate);
   const horizonMonths = Math.max(1, Math.round(inputs.analysisHorizonMonths || 12));
-  const curvePoints = buildProfitCurvePoints(results.totalFixedCost, results.monthlyCashNetBenefit, horizonMonths);
+  const monthlyCashForCurve = typeof results.monthlyCashNetBenefit === "number"
+    ? results.monthlyCashNetBenefit
+    : results.netMonthlyBenefit + results.monthlyAmortizedFixedCost;
+  const curvePoints = buildProfitCurvePoints(results.totalFixedCost, monthlyCashForCurve, horizonMonths);
   const harnessCostPerUnit = Math.max(results.layer2CostPerUnit - results.layer1CostPerUnit, 0);
   const harnessMonthlyCost = Math.max(results.layer2MonthlyCost - results.layer1MonthlyCost, 0);
   const costSlices = [
@@ -589,6 +592,7 @@ function computeChartMaxY(rawMinY: number, rawMaxY: number): number {
 }
 export default ROIDashboard;
 mountWidget(<ROIDashboard />);
+
 
 
 
