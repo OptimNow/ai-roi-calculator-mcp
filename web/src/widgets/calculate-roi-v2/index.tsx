@@ -278,13 +278,22 @@ function ProfitCurveChart({
 }) {
   const width = 680;
   const height = 260;
-  const padding = { top: 16, right: 20, bottom: 36, left: 72 };
+  const padding = { top: 16, right: 20, bottom: 40, left: 78 };
   const xMax = points[points.length - 1]?.month ?? 12;
-  const minY = Math.min(...points.map((p) => p.value), 0);
-  const maxY = Math.max(...points.map((p) => p.value), 0);
+  const rawMinY = Math.min(...points.map((p) => p.value), 0);
+  const rawMaxY = Math.max(...points.map((p) => p.value), 0);
+  const yPad = Math.max((rawMaxY - rawMinY) * 0.12, 100);
+  const minY = rawMinY - yPad;
+  const maxY = rawMaxY + yPad;
   const ySpan = Math.max(maxY - minY, 1);
   const toX = (month: number) => padding.left + (month / xMax) * (width - padding.left - padding.right);
   const toY = (value: number) => padding.top + ((maxY - value) / ySpan) * (height - padding.top - padding.bottom);
+  const toYFromRatio = (ratio: number) => padding.top + ratio * (height - padding.top - padding.bottom);
+  const yTicks = [0, 0.25, 0.5, 0.75, 1].map((r) => {
+    const v = maxY - r * ySpan;
+    return { value: v, y: toYFromRatio(r) };
+  });
+  const monthTicks = [0, 3, 6, 9, 12].filter((m) => m <= xMax);
 
   const pathD = points
     .map((p, idx) => `${idx === 0 ? "M" : "L"} ${toX(p.month).toFixed(2)} ${toY(p.value).toFixed(2)}`)
@@ -295,21 +304,50 @@ function ProfitCurveChart({
 
   return (
     <svg viewBox={`0 0 ${width} ${height}`} style={{ width: "100%", height: "auto" }} role="img" aria-label="Cumulative profit over time">
-      {[0.25, 0.5, 0.75, 1].map((step) => {
-        const y = padding.top + step * (height - padding.top - padding.bottom);
-        return <line key={step} x1={padding.left} y1={y} x2={width - padding.right} y2={y} stroke="#e2e8f0" strokeDasharray="3 3" />;
+      {yTicks.map((tick, idx) => {
+        const isZero = Math.abs(tick.value) < 1e-6;
+        return (
+          <g key={idx}>
+            <line
+              x1={padding.left}
+              y1={tick.y}
+              x2={width - padding.right}
+              y2={tick.y}
+              stroke={isZero ? "#94a3b8" : "#e2e8f0"}
+              strokeDasharray={isZero ? "4 4" : "3 3"}
+            />
+            <text x={padding.left - 8} y={tick.y + 4} fill="#64748b" fontSize="11" textAnchor="end">
+              {formatAxisMoney(tick.value)}
+            </text>
+          </g>
+        );
       })}
-      <line x1={padding.left} y1={zeroY} x2={width - padding.right} y2={zeroY} stroke="#64748b" strokeDasharray="4 4" />
-      <path d={areaD} fill="rgba(34, 197, 94, 0.12)" />
-      <path d={pathD} fill="none" stroke="#22c55e" strokeWidth="3" />
+      <path d={areaD} fill="rgba(34, 197, 94, 0.10)" />
+      <rect
+        x={padding.left}
+        y={zeroY}
+        width={width - padding.left - padding.right}
+        height={Math.max(0, height - padding.bottom - zeroY)}
+        fill="rgba(239, 68, 68, 0.06)"
+      />
+      <path d={pathD} fill="none" stroke="#16a34a" strokeWidth="3.2" strokeLinecap="round" />
+      <circle cx={toX(points[points.length - 1]?.month ?? 0)} cy={toY(points[points.length - 1]?.value ?? 0)} r={3.5} fill="#16a34a" />
       {breakEvenMonth !== undefined && breakEvenMonth >= 0 && breakEvenMonth <= xMax && (
         <>
-          <line x1={toX(breakEvenMonth)} y1={padding.top} x2={toX(breakEvenMonth)} y2={height - padding.bottom} stroke="#a3a3a3" strokeDasharray="4 4" />
-          <text x={toX(breakEvenMonth) + 4} y={padding.top + 14} fill="#475569" fontSize="12">
-            Break-even
+          <line x1={toX(breakEvenMonth)} y1={padding.top} x2={toX(breakEvenMonth)} y2={height - padding.bottom} stroke="#6366f1" strokeDasharray="4 4" />
+          <text x={toX(breakEvenMonth) + 4} y={padding.top + 14} fill="#4f46e5" fontSize="12">
+            Break-even ({breakEvenMonth.toFixed(1)}m)
           </text>
         </>
       )}
+      {monthTicks.map((m) => (
+        <g key={m}>
+          <line x1={toX(m)} y1={height - padding.bottom} x2={toX(m)} y2={height - padding.bottom + 4} stroke="#94a3b8" />
+          <text x={toX(m)} y={height - 10} fill="#64748b" fontSize="11" textAnchor="middle">
+            {m}
+          </text>
+        </g>
+      ))}
       <text x={width / 2} y={height - 8} fill="#64748b" fontSize="12" textAnchor="middle">Months</text>
       <text x={18} y={height / 2} fill="#64748b" fontSize="12" transform={`rotate(-90 18 ${height / 2})`} textAnchor="middle">
         Cumulative Profit
@@ -317,7 +355,6 @@ function ProfitCurveChart({
     </svg>
   );
 }
-
 function CostValueColumns({ cost, value }: { cost: number; value: number }) {
   const max = Math.max(cost, value, 1);
   const costH = (cost / max) * 180;
@@ -501,5 +538,20 @@ function formatK(value: number): string {
   return `${(value / 1_000).toFixed(1)}k`;
 }
 
+function formatAxisMoney(value: number): string {
+  const abs = Math.abs(value);
+  const sign = value < 0 ? "-" : "";
+  if (abs >= 1_000_000) {
+    return `${sign}${(abs / 1_000_000).toFixed(1)}m`;
+  }
+  if (abs >= 1_000) {
+    return `${sign}${(abs / 1_000).toFixed(1)}k`;
+  }
+  return `${sign}${abs.toFixed(0)}`;
+}
 export default ROIDashboard;
 mountWidget(<ROIDashboard />);
+
+
+
+
