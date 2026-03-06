@@ -1,97 +1,90 @@
-# Skybridge Starter
+# AI ROI Calculator — MCP App
 
-A minimal TypeScript template for building MCP and ChatGPT Apps with the [Skybridge](https://docs.skybridge.tech/home) framework.
+An MCP (Model Context Protocol) app that calculates ROI for AI/LLM implementations using a 3-layer cost framework. Works as an interactive tool inside AI conversations on **Claude**, **ChatGPT**, **VS Code**, and other MCP-compatible clients.
+
+Built by [OptimNow](https://www.optimnow.io) with the [Skybridge](https://docs.skybridge.tech/) framework.
+
+## Tools
+
+| Tool | Description |
+|------|-------------|
+| `calculate-roi` | Calculate ROI for an AI project — returns ROI%, payback period, break-even volume, and cost breakdown |
+| `sensitivity-analysis` | Run ±20% sensitivity analysis on key variables to identify ROI risk factors |
+| `load-preset` | Load preset defaults for common use cases (support bot, invoice processing, etc.) |
+
+### 3-Layer Cost Framework
+
+- **Layer 1 (Infrastructure):** Model inference costs — token pricing, cache optimization, multi-model routing
+- **Layer 2 (Harness):** Orchestration, retrieval, monitoring, tool APIs, operational overhead
+- **Layer 3 (Business Value):** Cost Displacement, Revenue Uplift, Retention Uplift, or Premium Monetization
+
+### Presets
+
+Pre-configured defaults for common AI use cases:
+- Customer Support Bot
+- Invoice Processing
+- E-commerce Recommendations
+- Customer Retention AI
+- AI Premium Features
 
 ## Getting Started
 
 ### Prerequisites
 
 - Node.js 24+
-- HTTP tunnel such as [ngrok](https://ngrok.com/download) if you want to test with remote MCP hosts like ChatGPT or Claude.ai.
 
-### Local Development
-
-#### 1. Install
+### Install & Run
 
 ```bash
 npm install
-# or
-yarn install
-# or
-pnpm install
-# or
-bun install
+npm run dev
 ```
 
-#### 2. Start your local server
+This starts the MCP server with Skybridge DevTools at `http://localhost:3000/`.
 
-Run the development server from the root directory:
+### Connect to Claude Desktop
+
+Add to your `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "ai-roi-calculator": {
+      "command": "cmd",
+      "args": ["/c", "npx", "mcp-remote", "https://ai-roi-calculator-mc-e9dd36e7.alpic.live/"]
+    }
+  }
+}
+```
+
+Restart Claude Desktop to connect.
+
+### Connect to ChatGPT
+
+1. Go to **Settings > Connected Apps**
+2. Add the MCP server URL: `https://ai-roi-calculator-mc-e9dd36e7.alpic.live/`
+3. ChatGPT will render interactive widget UIs for each tool
+
+### Example Prompts
+
+- "Load the support bot preset and calculate its ROI"
+- "Calculate ROI for an AI project with 10,000 monthly transactions"
+- "Run a sensitivity analysis on my AI implementation"
+
+## Deployment
+
+Deployed to [Alpic Cloud](https://alpic.ai/):
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npx alpic deploy --yes --project-name ai-roi-calculator-mcp
 ```
 
-This command starts:
-- Your MCP server at `http://localhost:3000/mcp`.
-- Skybridge DevTools UI at `http://localhost:3000/`.
+## Related
 
-#### 3. Project structure
-
-```
-├── server/
-│   └── src/
-│       └── index.ts      # Server entry point
-├── web/
-│   ├── src/
-│   │   ├── widgets/      # React components (one per widget)
-│   │   ├── helpers.ts    # Shared utilities
-│   │   └── index.css     # Global styles
-│   └── vite.config.ts
-├── alpic.json            # Deployment config
-├── nodemon.json          # Dev server config
-└── package.json
-```
-
-### Create your first widget
-
-#### 1. Add a new widget
-
-- Register a widget in `server/src/server.ts` with a unique name (e.g., `my-widget`) using [`registerWidget`](https://docs.skybridge.tech/api-reference/register-widget)
-- Create a matching React component at `web/src/widgets/my-widget.tsx`. **The file name must match the widget name exactly**.
-
-#### 2. Edit widgets with Hot Module Replacement (HMR)
-
-Edit and save components in `web/src/widgets/` — changes will appear instantly inside your App.
-
-#### 3. Edit server code
-
-Modify files in `server/` and refresh the connection with your testing MCP Client to see the changes.
-
-### Testing your App
-
-You can test your App locally by using our DevTools UI on `localhost:3000` while running the `pnpm dev` command.
-
-To test your app with other MCP Clients like ChatGPT, Claude or VSCode, see [Testing Your App](https://docs.skybridge.tech/quickstart/test-your-app).
-
-
-## Deploy to Production
-
-Skybridge is infrastructure vendor agnostic, and your app can be deployed on any cloud platform supporting MCP.
-
-The simplest way to deploy your App in minutes is [Alpic](https://alpic.ai/).
-1. Create an account on [Alpic platform](https://app.alpic.ai/). 
-2. Connect your GitHub repository to automatically deploy at each commit. 
-3. Use your remote App URL to connect it to MCP Clients, or use the Alpic Playground to easily test your App.
-
-## Resources
+- [AI ROI Calculator (standalone web app)](https://ai-roi-calculator.vercel.app) — the original interactive calculator
 - [Skybridge Documentation](https://docs.skybridge.tech/)
-- [Apps SDK Documentation](https://developers.openai.com/apps-sdk)
-- [MCP Apps Documentation](https://github.com/modelcontextprotocol/ext-apps/tree/main)
-- [Model Context Protocol Documentation](https://modelcontextprotocol.io/)
-- [Alpic Documentation](https://docs.alpic.ai/)
+- [MCP Protocol](https://modelcontextprotocol.io/)
+
+## License
+
+Private repository. All rights reserved.
