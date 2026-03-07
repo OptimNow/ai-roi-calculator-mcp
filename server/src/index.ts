@@ -14,6 +14,10 @@ const modelParamsSchema = z.object({
 });
 
 const useCaseInputSchema = z.object({
+  preset: z
+    .enum(["support", "invoice", "recommendation", "retention", "premium"])
+    .optional()
+    .describe("Optional preset to load before applying any custom input overrides"),
   useCaseName: z.string().default("AI Project"),
   unitName: z.string().default("transaction"),
   monthlyVolume: z.number().min(0).describe("Monthly transaction volume"),
@@ -100,9 +104,10 @@ server.registerWidget(
   {
     title: "Calculate ROI",
     description:
-      "Calculate ROI for an AI/LLM implementation using a 3-layer cost framework. " +
+      "Use this when you want the full interactive ROI dashboard for an AI/LLM implementation. " +
+      "It can run directly from a preset such as 'support' and render KPI cards, break-even banner, ROI curve, and financial overview. " +
       "Returns ROI percentage, payback period, break-even volume, cost breakdown, and net benefit. " +
-      "Use 'load-preset' first to get recommended defaults for common use cases.",
+      "You do not need to call 'load-preset' first unless you only want the raw preset values.",
     inputSchema: useCaseInputSchema.shape,
     annotations: readOnlyAnnotations,
     _meta: {
@@ -112,7 +117,8 @@ server.registerWidget(
   },
   async (inputs) => {
     try {
-      const fullInputs = { ...DEFAULT_INPUTS, ...inputs };
+      const presetData = inputs.preset ? PRESETS[inputs.preset] : undefined;
+      const fullInputs = { ...DEFAULT_INPUTS, ...presetData, ...inputs };
       const results = calculateROI(fullInputs);
 
       return {
@@ -167,7 +173,7 @@ server.registerTool(
       "Load a preset configuration for a common AI use case. " +
       "Available presets: support (Customer Support Bot), invoice (Invoice Processing), " +
       "recommendation (E-commerce Recommendations), retention (Customer Retention AI), " +
-      "premium (AI Premium Features). Returns pre-filled inputs you can pass to calculate-roi-v4.",
+      "premium (AI Premium Features). Returns raw preset values only and does not render the dashboard.",
     inputSchema: {
       preset: z
         .enum(["support", "invoice", "recommendation", "retention", "premium"])
