@@ -90,6 +90,8 @@ const server = new McpServer(
 );
 
 const readOnlyAnnotations = { readOnlyHint: true };
+const appsSdkWidgetUri = "ui://widgets/apps-sdk/calculate-roi-v4.html";
+const mcpAppWidgetUri = "ui://widgets/ext-apps/calculate-roi-v4.html";
 
 server.registerWidget(
   "calculate-roi-v4",
@@ -183,6 +185,10 @@ server.registerTool(
     _meta: {
       "openai/toolInvocation/invoking": "Loading preset",
       "openai/toolInvocation/invoked": "Preset loaded",
+      "openai/outputTemplate": appsSdkWidgetUri,
+      ui: {
+        resourceUri: mcpAppWidgetUri,
+      },
     },
   },
   async ({ preset }) => {
@@ -195,8 +201,13 @@ server.registerTool(
     }
 
     const fullInputs = { ...DEFAULT_INPUTS, ...presetData };
+    const results = calculateROI(fullInputs);
 
     return {
+      structuredContent: {
+        inputs: fullInputs,
+        results,
+      },
       content: [
         {
           type: "text",
@@ -212,7 +223,7 @@ server.registerTool(
             `| Primary Model Input Tokens | ${fullInputs.primaryModel.avgInputTokensPerUnit} |`,
             `| Primary Model Output Tokens | ${fullInputs.primaryModel.avgOutputTokensPerUnit} |`,
             "",
-            "You can now run `calculate-roi-v4` with these defaults, or modify individual fields.",
+            "Preset loaded and dashboard rendered with default values.",
           ].join("\n"),
         },
       ],
