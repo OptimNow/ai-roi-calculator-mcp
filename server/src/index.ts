@@ -80,7 +80,7 @@ const useCaseInputSchema = z.object({
 const server = new McpServer(
   {
     name: "ai-roi-calculator",
-    version: "1.0.2",
+    version: "1.0.3",
   },
   { capabilities: {} },
 );
@@ -88,7 +88,7 @@ const server = new McpServer(
 const readOnlyAnnotations = { readOnlyHint: true };
 
 server.registerWidget(
-  "calculate-roi-v3",
+  "calculate-roi-v4",
   {
     description: "AI ROI Calculator - Interactive dashboard showing ROI metrics",
     _meta: {
@@ -167,7 +167,7 @@ server.registerTool(
       "Load a preset configuration for a common AI use case. " +
       "Available presets: support (Customer Support Bot), invoice (Invoice Processing), " +
       "recommendation (E-commerce Recommendations), retention (Customer Retention AI), " +
-      "premium (AI Premium Features). Returns pre-filled inputs you can pass to calculate-roi-v3.",
+      "premium (AI Premium Features). Returns pre-filled inputs you can pass to calculate-roi-v4.",
     inputSchema: {
       preset: z
         .enum(["support", "invoice", "recommendation", "retention", "premium"])
@@ -206,7 +206,7 @@ server.registerTool(
             `| Primary Model Input Tokens | ${fullInputs.primaryModel.avgInputTokensPerUnit} |`,
             `| Primary Model Output Tokens | ${fullInputs.primaryModel.avgOutputTokensPerUnit} |`,
             "",
-            "You can now run `calculate-roi-v3` with these defaults, or modify individual fields.",
+            "You can now run `calculate-roi-v4` with these defaults, or modify individual fields.",
           ].join("\n"),
         },
       ],
@@ -218,5 +218,6 @@ server.registerTool(
 server.run();
 
 export type AppType = typeof server;
+
 
 
