@@ -117,11 +117,6 @@ function ROIDashboard() {
       <Panel title="ROI Curve: Cumulative Profit Over Time">
         <ProfitCurveChart points={curvePoints} breakEvenMonth={toBreakEvenMonth(results.paybackMonths)} />
       </Panel>
-      <Panel title="Chart Diagnostics">
-        <div style={{ fontSize: "12px", color: "#475569" }}>
-          Widget version: <strong>v3.1</strong> | Points: <strong>{curvePoints.length}</strong> | Start: <strong>{formatAxisMoney(Number(curvePoints[0]?.value ?? 0))}</strong> | End: <strong>{formatAxisMoney(Number(curvePoints[curvePoints.length - 1]?.value ?? 0))}</strong> | Monthly cash: <strong>{formatAxisMoney(monthlyCashForCurve)}</strong>
-        </div>
-      </Panel>
 
       <Panel title="Financial Overview">
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
