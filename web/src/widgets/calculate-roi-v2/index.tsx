@@ -296,16 +296,11 @@ function ProfitCurveChart({
   const xMax = points[points.length - 1]?.month ?? 12;
   const rawMinY = Math.min(...points.map((p) => p.value));
   const rawMaxY = Math.max(...points.map((p) => p.value));
-  const minY = computeChartMinY(rawMinY, rawMaxY);
-  const maxY = computeChartMaxY(rawMinY, rawMaxY);
+  const { minY, maxY, ticks: yTickValues } = buildNiceYAxis(rawMinY, rawMaxY, 5);
   const ySpan = Math.max(maxY - minY, 1);
   const toX = (month: number) => padding.left + (month / xMax) * (width - padding.left - padding.right);
   const toY = (value: number) => padding.top + ((maxY - value) / ySpan) * (height - padding.top - padding.bottom);
-  const toYFromRatio = (ratio: number) => padding.top + ratio * (height - padding.top - padding.bottom);
-  const yTicks = [0, 0.25, 0.5, 0.75, 1].map((r) => {
-    const v = maxY - r * ySpan;
-    return { value: v, y: toYFromRatio(r) };
-  });
+  const yTicks = yTickValues.map((value) => ({ value, y: toY(value) }));
   const monthTicks = [0, 3, 6, 9, 12].filter((m) => m <= xMax);
 
   const pathD = points
@@ -569,26 +564,46 @@ function formatAxisMoney(value: number): string {
   }
   return `${sign}$${abs.toFixed(0)}`;
 }
-function computeChartMinY(rawMinY: number, rawMaxY: number): number {
-  if (rawMinY >= 0) {
-    return 0;
+
+function buildNiceYAxis(rawMinY: number, rawMaxY: number, tickCount: number): { minY: number; maxY: number; ticks: number[] } {
+  const safeTickCount = Math.max(3, tickCount);
+  const rawSpan = Math.max(rawMaxY - rawMinY, 1);
+  const padding = Math.max(rawSpan * 0.08, 100);
+  const domainMin = Math.min(0, rawMinY - padding);
+  const domainMax = Math.max(0, rawMaxY + padding);
+  const roughStep = (domainMax - domainMin) / (safeTickCount - 1);
+  const step = niceStep(roughStep);
+  const minY = Math.floor(domainMin / step) * step;
+  const maxY = Math.ceil(domainMax / step) * step;
+  const ticks: number[] = [];
+
+  for (let value = maxY; value >= minY; value -= step) {
+    ticks.push(Math.abs(value) < 1e-9 ? 0 : Number(value.toFixed(6)));
   }
-  if (rawMaxY <= 0) {
-    return rawMinY - Math.max(Math.abs(rawMinY) * 0.08, 100);
+
+  if (!ticks.includes(0) && minY < 0 && maxY > 0) {
+    ticks.push(0);
+    ticks.sort((a, b) => b - a);
   }
-  const span = rawMaxY - rawMinY;
-  return rawMinY - Math.max(span * 0.1, 100);
+
+  return { minY, maxY, ticks };
 }
 
-function computeChartMaxY(rawMinY: number, rawMaxY: number): number {
-  if (rawMaxY <= 0) {
-    return 0;
+function niceStep(value: number): number {
+  const safeValue = Math.max(value, 1);
+  const magnitude = Math.pow(10, Math.floor(Math.log10(safeValue)));
+  const normalized = safeValue / magnitude;
+
+  if (normalized <= 1) {
+    return 1 * magnitude;
   }
-  if (rawMinY >= 0) {
-    return rawMaxY + Math.max(Math.abs(rawMaxY) * 0.08, 100);
+  if (normalized <= 2) {
+    return 2 * magnitude;
   }
-  const span = rawMaxY - rawMinY;
-  return rawMaxY + Math.max(span * 0.1, 100);
+  if (normalized <= 5) {
+    return 5 * magnitude;
+  }
+  return 10 * magnitude;
 }
 export default ROIDashboard;
 mountWidget(<ROIDashboard />);
