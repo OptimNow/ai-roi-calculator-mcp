@@ -5,12 +5,12 @@ import { PRESETS, DEFAULT_INPUTS } from "./lib/constants.js";
 import { ValueMethod } from "./lib/types.js";
 
 const modelParamsSchema = z.object({
-  avgInputTokensPerUnit: z.number().min(0).describe("Average input tokens per unit"),
-  avgOutputTokensPerUnit: z.number().min(0).describe("Average output tokens per unit"),
-  pricePer1MInputTokens: z.number().min(0).describe("Price per 1M input tokens (USD)"),
-  pricePer1MOutputTokens: z.number().min(0).describe("Price per 1M output tokens (USD)"),
-  costPerCall: z.number().min(0).describe("Flat cost per API call (alternative to token pricing)"),
-  useCallPricing: z.boolean().describe("Use per-call pricing instead of token-based"),
+  avgInputTokensPerUnit: z.number().min(0).optional().describe("Average input tokens per unit"),
+  avgOutputTokensPerUnit: z.number().min(0).optional().describe("Average output tokens per unit"),
+  pricePer1MInputTokens: z.number().min(0).optional().describe("Price per 1M input tokens (USD)"),
+  pricePer1MOutputTokens: z.number().min(0).optional().describe("Price per 1M output tokens (USD)"),
+  costPerCall: z.number().min(0).optional().describe("Flat cost per API call (alternative to token pricing)"),
+  useCallPricing: z.boolean().optional().describe("Use per-call pricing instead of token-based"),
 });
 
 const useCaseInputSchema = z.object({
@@ -18,67 +18,53 @@ const useCaseInputSchema = z.object({
     .enum(["support", "invoice", "recommendation", "retention", "premium"])
     .optional()
     .describe("Optional preset to load before applying any custom input overrides"),
-  useCaseName: z.string().default("AI Project"),
-  unitName: z.string().default("transaction"),
-  monthlyVolume: z.number().min(0).describe("Monthly transaction volume"),
-  successRate: z.number().min(0).max(100).default(95).describe("Success rate (0-100%)"),
-  analysisHorizonMonths: z.number().min(1).default(12),
+  useCaseName: z.string().optional().describe("Use case name"),
+  unitName: z.string().optional().describe("Unit name"),
+  monthlyVolume: z.number().min(0).optional().describe("Monthly transaction volume"),
+  successRate: z.number().min(0).max(100).optional().describe("Success rate (0-100%)"),
+  analysisHorizonMonths: z.number().min(1).optional().describe("Analysis horizon in months"),
 
-  integrationCost: z.number().min(0).default(5000),
-  trainingTuningCost: z.number().min(0).default(2000),
-  changeManagementCost: z.number().min(0).default(1000),
-  amortizationMonths: z.number().min(1).default(12),
+  integrationCost: z.number().min(0).optional(),
+  trainingTuningCost: z.number().min(0).optional(),
+  changeManagementCost: z.number().min(0).optional(),
+  amortizationMonths: z.number().min(1).optional(),
 
-  primaryModel: modelParamsSchema.default({
-    avgInputTokensPerUnit: 1000,
-    avgOutputTokensPerUnit: 500,
-    pricePer1MInputTokens: 0.15,
-    pricePer1MOutputTokens: 0.6,
-    costPerCall: 0.005,
-    useCallPricing: false,
-  }),
-  secondaryModel: modelParamsSchema.default({
-    avgInputTokensPerUnit: 1000,
-    avgOutputTokensPerUnit: 500,
-    pricePer1MInputTokens: 2.5,
-    pricePer1MOutputTokens: 10,
-    costPerCall: 0.005,
-    useCallPricing: false,
-  }),
-  routingSimplePercent: z.number().min(0).max(100).default(100),
-  cacheHitRate: z.number().min(0).max(100).default(10),
-  cachedTokenDiscount: z.number().min(0).max(100).default(90),
+  primaryModel: modelParamsSchema.optional(),
+  secondaryModel: modelParamsSchema.optional(),
+  routingSimplePercent: z.number().min(0).max(100).optional(),
+  cacheHitRate: z.number().min(0).max(100).optional(),
+  cachedTokenDiscount: z.number().min(0).max(100).optional(),
 
-  orchestrationCostPerUnit: z.number().min(0).default(0.001),
-  retrievalCostPerUnit: z.number().min(0).default(0.002),
-  toolApiCostPerUnit: z.number().min(0).default(0),
-  loggingMonitoringCostPerUnit: z.number().min(0).default(0.0005),
-  safetyGuardrailsCostPerUnit: z.number().min(0).default(0.0005),
-  networkEgressCostPerUnit: z.number().min(0).default(0.0001),
-  storageCostPerUnit: z.number().min(0).default(0.0001),
-  retryRate: z.number().min(0).max(1).default(0.1),
-  overheadMultiplier: z.number().min(1).default(1.0),
+  orchestrationCostPerUnit: z.number().min(0).optional(),
+  retrievalCostPerUnit: z.number().min(0).optional(),
+  toolApiCostPerUnit: z.number().min(0).optional(),
+  loggingMonitoringCostPerUnit: z.number().min(0).optional(),
+  safetyGuardrailsCostPerUnit: z.number().min(0).optional(),
+  networkEgressCostPerUnit: z.number().min(0).optional(),
+  storageCostPerUnit: z.number().min(0).optional(),
+  retryRate: z.number().min(0).max(1).optional(),
+  overheadMultiplier: z.number().min(1).optional(),
 
-  valueMethod: z.nativeEnum(ValueMethod).default(ValueMethod.COST_DISPLACEMENT),
+  valueMethod: z.nativeEnum(ValueMethod).optional(),
 
-  baselineHumanCostPerUnit: z.number().min(0).default(5),
-  deflectionRate: z.number().min(0).max(100).default(40),
-  residualHumanReviewRate: z.number().min(0).max(100).default(10),
-  residualReviewCostPerUnit: z.number().min(0).default(2.5),
+  baselineHumanCostPerUnit: z.number().min(0).optional(),
+  deflectionRate: z.number().min(0).max(100).optional(),
+  residualHumanReviewRate: z.number().min(0).max(100).optional(),
+  residualReviewCostPerUnit: z.number().min(0).optional(),
 
-  baselineConversionRate: z.number().min(0).max(100).default(2.5),
-  conversionUpliftAbsolute: z.number().min(0).default(0.5),
-  averageOrderValue: z.number().min(0).default(100),
-  grossMargin: z.number().min(0).max(100).default(60),
+  baselineConversionRate: z.number().min(0).max(100).optional(),
+  conversionUpliftAbsolute: z.number().min(0).optional(),
+  averageOrderValue: z.number().min(0).optional(),
+  grossMargin: z.number().min(0).max(100).optional(),
 
-  baselineChurnRate: z.number().min(0).max(100).default(1.0),
-  churnReductionAbsolute: z.number().min(0).default(0.1),
-  annualValuePerCustomer: z.number().min(0).default(1200),
-  customersImpactedPerMonth: z.number().min(0).default(1000),
+  baselineChurnRate: z.number().min(0).max(100).optional(),
+  churnReductionAbsolute: z.number().min(0).optional(),
+  annualValuePerCustomer: z.number().min(0).optional(),
+  customersImpactedPerMonth: z.number().min(0).optional(),
 
-  pricePerSubscriberPerMonth: z.number().min(0).default(20),
-  subscribers: z.number().min(0).default(500),
-  nonAiCOGSPerSubscriber: z.number().min(0).default(2),
+  pricePerSubscriberPerMonth: z.number().min(0).optional(),
+  subscribers: z.number().min(0).optional(),
+  nonAiCOGSPerSubscriber: z.number().min(0).optional(),
 });
 
 const server = new McpServer(
@@ -120,7 +106,21 @@ server.registerWidget(
   async (inputs) => {
     try {
       const presetData = inputs.preset ? PRESETS[inputs.preset] : undefined;
-      const fullInputs = { ...DEFAULT_INPUTS, ...presetData, ...inputs };
+      const fullInputs = {
+        ...DEFAULT_INPUTS,
+        ...presetData,
+        ...inputs,
+        primaryModel: {
+          ...DEFAULT_INPUTS.primaryModel,
+          ...presetData?.primaryModel,
+          ...inputs.primaryModel,
+        },
+        secondaryModel: {
+          ...DEFAULT_INPUTS.secondaryModel,
+          ...presetData?.secondaryModel,
+          ...inputs.secondaryModel,
+        },
+      };
       const results = calculateROI(fullInputs);
 
       return {
@@ -200,7 +200,18 @@ server.registerTool(
       };
     }
 
-    const fullInputs = { ...DEFAULT_INPUTS, ...presetData };
+    const fullInputs = {
+      ...DEFAULT_INPUTS,
+      ...presetData,
+      primaryModel: {
+        ...DEFAULT_INPUTS.primaryModel,
+        ...presetData.primaryModel,
+      },
+      secondaryModel: {
+        ...DEFAULT_INPUTS.secondaryModel,
+        ...presetData.secondaryModel,
+      },
+    };
     const results = calculateROI(fullInputs);
 
     return {
