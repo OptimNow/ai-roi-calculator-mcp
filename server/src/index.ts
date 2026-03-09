@@ -70,7 +70,7 @@ const useCaseInputSchema = z.object({
 const server = new McpServer(
   {
     name: "ai-roi-calculator",
-    version: "1.0.3",
+    version: "1.1.0",
   },
   { capabilities: {} },
 );
@@ -95,7 +95,10 @@ server.registerWidget(
       "Use this when you want the full interactive ROI dashboard for an AI/LLM implementation. " +
       "It can run directly from a preset such as 'support' and render KPI cards, break-even banner, ROI curve, and financial overview. " +
       "Returns ROI percentage, payback period, break-even volume, cost breakdown, and net benefit. " +
-      "You do not need to call 'load-preset' first unless you only want the raw preset values.",
+      "You do not need to call 'load-preset' first unless you only want the raw preset values. " +
+      "IMPORTANT: When presenting results, report ALL dollar amounts and percentages EXACTLY as returned in the summary. " +
+      "Do NOT recalculate, round, or estimate any figures — especially do not compute annual from monthly yourself. " +
+      "Use the summary field verbatim when presenting results in text.",
     inputSchema: useCaseInputSchema.shape,
     annotations: readOnlyAnnotations,
     _meta: {
@@ -123,6 +126,18 @@ server.registerWidget(
       };
       const results = calculateROI(fullInputs);
 
+      const fmt = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+      const summary = [
+        `${fullInputs.useCaseName} — ROI Summary`,
+        `ROI: ${results.roiPercentage.toFixed(1)}%`,
+        `Net Monthly Benefit: $${fmt(results.netMonthlyBenefit)}`,
+        `Annualized Net Benefit: $${fmt(results.annualizedNetBenefit)}`,
+        `Payback: ${results.paybackMonths} months`,
+        `Break-even Volume: ${results.breakEvenVolume !== undefined ? results.breakEvenVolume.toLocaleString() : "N/A"} ${fullInputs.unitName}s/month`,
+        `Monthly Cost: $${fmt(results.totalMonthlyCost)} | Monthly Value: $${fmt(results.totalMonthlyValue)}`,
+      ].join(" | ");
+
       return {
         structuredContent: {
           inputs: fullInputs,
@@ -137,22 +152,16 @@ server.registerWidget(
               "| Metric | Value |",
               "|--------|-------|",
               `| ROI | ${results.roiPercentage.toFixed(1)}% |`,
-              `| Monthly Volume | ${results.effectiveMonthlyVolume.toLocaleString()} ${fullInputs.unitName}s |`,
-              `| Monthly Cost | $${results.totalMonthlyCost.toFixed(2)} |`,
-              `| Monthly Value | $${results.totalMonthlyValue.toFixed(2)} |`,
-              `| Net Monthly Benefit | $${results.netMonthlyBenefit.toFixed(2)} |`,
-              `| Annualized Net Benefit | $${results.annualizedNetBenefit.toFixed(2)} |`,
+              `| Net Monthly Benefit | $${fmt(results.netMonthlyBenefit)} |`,
+              `| Annualized Net Benefit | $${fmt(results.annualizedNetBenefit)} |`,
               `| Payback Period | ${results.paybackMonths} months |`,
               `| Break-even Volume | ${results.breakEvenVolume !== undefined ? results.breakEvenVolume.toLocaleString() : "N/A"} ${fullInputs.unitName}s/month |`,
+              `| Monthly Cost | $${fmt(results.totalMonthlyCost)} |`,
+              `| Monthly Value | $${fmt(results.totalMonthlyValue)} |`,
               "",
-              "### Cost Breakdown",
-              "| Layer | Per Unit | Monthly |",
-              "|-------|----------|---------|",
-              `| L1 Infrastructure | $${results.layer1CostPerUnit.toFixed(6)} | $${results.layer1MonthlyCost.toFixed(2)} |`,
-              `| L2 Harness | $${results.layer2CostPerUnit.toFixed(6)} | $${results.layer2MonthlyCost.toFixed(2)} |`,
-              `| Fixed (amortized) | - | $${results.monthlyAmortizedFixedCost.toFixed(2)} |`,
+              `> Report these figures exactly as shown. Full cost layer breakdown is in the interactive widget.`,
               "",
-              `**Value Method:** ${fullInputs.valueMethod}`,
+              `**Summary:** ${summary}`,
             ].join("\n"),
           },
         ],
