@@ -128,6 +128,11 @@ server.registerWidget(
 
       const fmt = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+      // Compute human baseline for context (cost displacement only)
+      const baselineMonthlyCost = fullInputs.valueMethod === ValueMethod.COST_DISPLACEMENT
+        ? fullInputs.baselineHumanCostPerUnit * fullInputs.monthlyVolume
+        : undefined;
+
       const summary = [
         `${fullInputs.useCaseName} — ROI Summary`,
         `ROI: ${results.roiPercentage.toFixed(1)}%`,
@@ -137,6 +142,10 @@ server.registerWidget(
         `Break-even Volume: ${results.breakEvenVolume !== undefined ? results.breakEvenVolume.toLocaleString() : "N/A"} ${fullInputs.unitName}s/month`,
         `Monthly Cost: $${fmt(results.totalMonthlyCost)} | Monthly Value: $${fmt(results.totalMonthlyValue)}`,
       ].join(" | ");
+
+      const baselineRow = baselineMonthlyCost !== undefined
+        ? `| Human Baseline (monthly) | $${fmt(baselineMonthlyCost)} |\n`
+        : "";
 
       return {
         structuredContent: {
@@ -158,10 +167,16 @@ server.registerWidget(
               `| Break-even Volume | ${results.breakEvenVolume !== undefined ? results.breakEvenVolume.toLocaleString() : "N/A"} ${fullInputs.unitName}s/month |`,
               `| Monthly Cost | $${fmt(results.totalMonthlyCost)} |`,
               `| Monthly Value | $${fmt(results.totalMonthlyValue)} |`,
+              baselineRow +
+              `| Unit Cost (full stack) | $${results.totalCostPerUnit.toFixed(4)} |`,
               "",
-              `> Report these figures exactly as shown. Full cost layer breakdown is in the interactive widget.`,
+              `> **Important:** Net benefit already accounts for ${fullInputs.successRate}% success rate, deflection rate, and residual review costs. Do not recompute savings from raw baseline figures.`,
+              "",
+              `> Report these figures exactly as shown. Do not recalculate or estimate any amounts.`,
               "",
               `**Summary:** ${summary}`,
+              "",
+              `Methodology: https://airoicalculator.optimnow.io | Full formulas: https://github.com/OptimNow/ai-roi-calculator/blob/main/METHODOLOGY.md`,
             ].join("\n"),
           },
         ],
