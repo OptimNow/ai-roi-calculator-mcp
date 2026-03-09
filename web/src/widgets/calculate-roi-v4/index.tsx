@@ -72,7 +72,7 @@ function ROIDashboard() {
         confidence={confidence}
       />
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: "10px", margin: "16px 0" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: "10px", margin: "16px 0" }}>
         <KPICard
           label="ROI"
           value={`${Math.round(results.roiPercentage)}%`}
@@ -119,7 +119,7 @@ function ROIDashboard() {
       </Panel>
 
       <Panel title="Financial Overview">
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "16px" }}>
           <CostValueColumns cost={results.totalMonthlyCost} value={results.totalMonthlyValue} />
           <CostCompositionDonut slices={costSlices} />
         </div>
@@ -192,6 +192,14 @@ function ValueSummaryCard({
   );
 }
 
+function metricStatFontSize(value: string): string {
+  const len = value.length;
+  if (len <= 5) return "26px";
+  if (len <= 7) return "22px";
+  if (len <= 9) return "18px";
+  return "15px";
+}
+
 function MetricStat({
   label,
   value,
@@ -202,11 +210,19 @@ function MetricStat({
   valueColor?: string;
 }) {
   return (
-    <div>
+    <div style={{ overflow: "hidden" }}>
       <div style={{ fontSize: "11px", textTransform: "uppercase", color: "#64748b", marginBottom: "4px" }}>{label}</div>
-      <div style={{ fontSize: "26px", fontWeight: 700, color: valueColor ?? "#0f172a", lineHeight: 1 }}>{value}</div>
+      <div style={{ fontSize: metricStatFontSize(value), fontWeight: 700, color: valueColor ?? "#0f172a", lineHeight: 1, wordBreak: "break-word" }}>{value}</div>
     </div>
   );
+}
+
+function kpiValueFontSize(value: string): string {
+  const len = value.length;
+  if (len <= 4) return "36px";
+  if (len <= 6) return "28px";
+  if (len <= 8) return "22px";
+  return "18px";
 }
 
 function KPICard({
@@ -221,9 +237,9 @@ function KPICard({
   color: string;
 }) {
   return (
-    <div style={{ border: "1px solid #d6dbe3", borderRadius: "10px", padding: "12px", minHeight: "96px" }}>
+    <div style={{ border: "1px solid #d6dbe3", borderRadius: "10px", padding: "12px", minHeight: "96px", overflow: "hidden" }}>
       <div style={{ fontSize: "12px", textTransform: "uppercase", color: "#64748b", marginBottom: "8px", fontWeight: 700 }}>{label}</div>
-      <div style={{ fontSize: "36px", fontWeight: 800, color, lineHeight: 1 }}>{value}</div>
+      <div style={{ fontSize: kpiValueFontSize(value), fontWeight: 800, color, lineHeight: 1, wordBreak: "break-word" }}>{value}</div>
       <div style={{ marginTop: "8px", fontSize: "11px", color: "#64748b" }}>{subtitle}</div>
     </div>
   );
