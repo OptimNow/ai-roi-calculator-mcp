@@ -2,7 +2,14 @@ import { McpServer } from "skybridge/server";
 import { z } from "zod";
 import { calculateROI } from "./lib/calculations.js";
 import { PRESETS, DEFAULT_INPUTS } from "./lib/constants.js";
+import type { UseCaseInputs } from "./lib/types.js";
 import { ValueMethod } from "./lib/types.js";
+
+const ALL_PRESETS = [
+  "support", "knowledgeQA", "meetingSummary", "marketingContent",
+  "codingTask", "invoice", "callSummary", "agentWorkflow",
+  "recommendation", "retention", "premium",
+] as const;
 
 const modelParamsSchema = z.object({
   avgInputTokensPerUnit: z.number().min(0).optional().describe("Average input tokens per unit"),
@@ -15,9 +22,17 @@ const modelParamsSchema = z.object({
 
 const useCaseInputSchema = z.object({
   preset: z
-    .enum(["support", "invoice", "recommendation", "retention", "premium"])
+    .enum(ALL_PRESETS)
     .optional()
-    .describe("Optional preset to load before applying any custom input overrides"),
+    .describe(
+      "Optional preset to load before applying any custom input overrides. " +
+      "Available: support (Customer Support Bot), knowledgeQA (Knowledge Q&A), " +
+      "meetingSummary (Meeting Summary), marketingContent (Marketing Content), " +
+      "codingTask (Coding Task), invoice (Invoice Processing), " +
+      "callSummary (Call Summary), agentWorkflow (Agent Workflow), " +
+      "recommendation (E-commerce Recommendations), retention (Customer Retention AI), " +
+      "premium (AI Premium Features)"
+    ),
   useCaseName: z.string().optional().describe("Use case name"),
   unitName: z.string().optional().describe("Unit name"),
   monthlyVolume: z.number().min(0).optional().describe("Monthly transaction volume"),
@@ -67,11 +82,31 @@ const useCaseInputSchema = z.object({
   nonAiCOGSPerSubscriber: z.number().min(0).optional(),
 });
 
+/** Merge DEFAULT_INPUTS + optional preset + user overrides into complete UseCaseInputs */
+function buildFullInputs(inputs: z.infer<typeof useCaseInputSchema>): UseCaseInputs {
+  const presetData = inputs.preset ? PRESETS[inputs.preset] : undefined;
+  return {
+    ...DEFAULT_INPUTS,
+    ...presetData,
+    ...inputs,
+    primaryModel: {
+      ...DEFAULT_INPUTS.primaryModel,
+      ...presetData?.primaryModel,
+      ...inputs.primaryModel,
+    },
+    secondaryModel: {
+      ...DEFAULT_INPUTS.secondaryModel,
+      ...presetData?.secondaryModel,
+      ...inputs.secondaryModel,
+    },
+  };
+}
+
+const fmt = (n: number) =>
+  n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 const server = new McpServer(
-  {
-    name: "ai-roi-calculator",
-    version: "1.1.0",
-  },
+  { name: "ai-roi-calculator", version: "1.2.0" },
   { capabilities: {} },
 );
 
@@ -79,15 +114,13 @@ const readOnlyAnnotations = { readOnlyHint: true };
 const appsSdkWidgetUri = "ui://widgets/apps-sdk/calculate-roi-v4.html";
 const mcpAppWidgetUri = "ui://widgets/ext-apps/calculate-roi-v4.html";
 
+// ─── Tool 1: Calculate ROI (widget) ────────────────────────────────────────
+
 server.registerWidget(
   "calculate-roi-v4",
   {
     description: "AI ROI Calculator - Interactive dashboard showing ROI metrics",
-    _meta: {
-      ui: {
-        prefersBorder: true,
-      },
-    },
+    _meta: { ui: { prefersBorder: true } },
   },
   {
     title: "Calculate ROI",
@@ -108,30 +141,13 @@ server.registerWidget(
   },
   async (inputs) => {
     try {
-      const presetData = inputs.preset ? PRESETS[inputs.preset] : undefined;
-      const fullInputs = {
-        ...DEFAULT_INPUTS,
-        ...presetData,
-        ...inputs,
-        primaryModel: {
-          ...DEFAULT_INPUTS.primaryModel,
-          ...presetData?.primaryModel,
-          ...inputs.primaryModel,
-        },
-        secondaryModel: {
-          ...DEFAULT_INPUTS.secondaryModel,
-          ...presetData?.secondaryModel,
-          ...inputs.secondaryModel,
-        },
-      };
+      const fullInputs = buildFullInputs(inputs);
       const results = calculateROI(fullInputs);
 
-      const fmt = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-      // Compute human baseline for context (cost displacement only)
-      const baselineMonthlyCost = fullInputs.valueMethod === ValueMethod.COST_DISPLACEMENT
-        ? fullInputs.baselineHumanCostPerUnit * fullInputs.monthlyVolume
-        : undefined;
+      const baselineMonthlyCost =
+        fullInputs.valueMethod === ValueMethod.COST_DISPLACEMENT
+          ? fullInputs.baselineHumanCostPerUnit * fullInputs.monthlyVolume
+          : undefined;
 
       const summary = [
         `${fullInputs.useCaseName} — ROI Summary`,
@@ -143,15 +159,13 @@ server.registerWidget(
         `Monthly Cost: $${fmt(results.totalMonthlyCost)} | Monthly Value: $${fmt(results.totalMonthlyValue)}`,
       ].join(" | ");
 
-      const baselineRow = baselineMonthlyCost !== undefined
-        ? `| Human Baseline (monthly) | $${fmt(baselineMonthlyCost)} |\n`
-        : "";
+      const baselineRow =
+        baselineMonthlyCost !== undefined
+          ? `| Human Baseline (monthly) | $${fmt(baselineMonthlyCost)} |\n`
+          : "";
 
       return {
-        structuredContent: {
-          inputs: fullInputs,
-          results,
-        },
+        structuredContent: { inputs: fullInputs, results },
         content: [
           {
             type: "text",
@@ -191,18 +205,24 @@ server.registerWidget(
   },
 );
 
+// ─── Tool 2: Load Preset ───────────────────────────────────────────────────
+
 server.registerTool(
   "load-preset",
   {
     title: "Load ROI preset",
     description:
       "Load a preset configuration for a common AI use case. " +
-      "Available presets: support (Customer Support Bot), invoice (Invoice Processing), " +
+      "Available presets: support (Customer Support Bot), knowledgeQA (Knowledge Q&A), " +
+      "meetingSummary (Meeting Summary), marketingContent (Marketing Content), " +
+      "codingTask (Coding Task), invoice (Invoice Processing), " +
+      "callSummary (Call Summary), agentWorkflow (Agent Workflow), " +
       "recommendation (E-commerce Recommendations), retention (Customer Retention AI), " +
-      "premium (AI Premium Features). Returns raw preset values only and does not render the dashboard.",
+      "premium (AI Premium Features). " +
+      "Returns raw preset values only and does not render the dashboard.",
     inputSchema: {
       preset: z
-        .enum(["support", "invoice", "recommendation", "retention", "premium"])
+        .enum(ALL_PRESETS)
         .describe("The preset use case to load"),
     },
     annotations: readOnlyAnnotations,
@@ -210,9 +230,7 @@ server.registerTool(
       "openai/toolInvocation/invoking": "Loading preset",
       "openai/toolInvocation/invoked": "Preset loaded",
       "openai/outputTemplate": appsSdkWidgetUri,
-      ui: {
-        resourceUri: mcpAppWidgetUri,
-      },
+      ui: { resourceUri: mcpAppWidgetUri },
     },
   },
   async ({ preset }) => {
@@ -224,25 +242,11 @@ server.registerTool(
       };
     }
 
-    const fullInputs = {
-      ...DEFAULT_INPUTS,
-      ...presetData,
-      primaryModel: {
-        ...DEFAULT_INPUTS.primaryModel,
-        ...presetData.primaryModel,
-      },
-      secondaryModel: {
-        ...DEFAULT_INPUTS.secondaryModel,
-        ...presetData.secondaryModel,
-      },
-    };
+    const fullInputs = buildFullInputs({ preset });
     const results = calculateROI(fullInputs);
 
     return {
-      structuredContent: {
-        inputs: fullInputs,
-        results,
-      },
+      structuredContent: { inputs: fullInputs, results },
       content: [
         {
           type: "text",
@@ -267,9 +271,152 @@ server.registerTool(
   },
 );
 
+// ─── Tool 3: Sensitivity Analysis ──────────────────────────────────────────
+
+server.registerTool(
+  "sensitivity-analysis",
+  {
+    title: "Sensitivity Analysis",
+    description:
+      "Run a sensitivity analysis on an AI ROI scenario. " +
+      "Takes the SAME inputs as 'calculate-roi-v4' (preset + optional overrides) and tests how ROI changes " +
+      "when each key variable is varied by ±20%. " +
+      "Returns a tornado-style table showing which assumptions have the biggest impact on ROI. " +
+      "Use this tool when the user asks questions like 'which assumptions matter most?', " +
+      "'what if the conversion uplift is different?', 'how sensitive is the ROI?', or " +
+      "'what drives the outcome?'. " +
+      "IMPORTANT: Pass the SAME inputs that were used for the base ROI calculation so the sensitivity " +
+      "analysis is based on the correct scenario — do NOT use defaults if the user provided custom values. " +
+      "Report the results EXACTLY as returned. Do NOT recalculate or add your own sensitivity estimates.",
+    inputSchema: useCaseInputSchema.shape,
+    annotations: readOnlyAnnotations,
+    _meta: {
+      "openai/toolInvocation/invoking": "Running sensitivity analysis",
+      "openai/toolInvocation/invoked": "Sensitivity analysis complete",
+    },
+  },
+  async (inputs) => {
+    try {
+      const fullInputs = buildFullInputs(inputs);
+
+      // Base case
+      const base = calculateROI(fullInputs);
+      const baseROI = base.roiPercentage;
+      const baseNetBenefit = base.netMonthlyBenefit;
+
+      // Define the four sensitivity dimensions
+      const dimensions = [
+        {
+          name: "Volume",
+          description: `Monthly ${fullInputs.unitName} volume`,
+          baseValue: `${fullInputs.monthlyVolume.toLocaleString()} ${fullInputs.unitName}s/mo`,
+          lowMod: { volumeMultiplier: 0.8, successRateMultiplier: 1, costMultiplier: 1, valueMultiplier: 1 },
+          highMod: { volumeMultiplier: 1.2, successRateMultiplier: 1, costMultiplier: 1, valueMultiplier: 1 },
+        },
+        {
+          name: "Success Rate",
+          description: "AI task success rate",
+          baseValue: `${fullInputs.successRate}%`,
+          lowMod: { volumeMultiplier: 1, successRateMultiplier: 0.8, costMultiplier: 1, valueMultiplier: 1 },
+          highMod: { volumeMultiplier: 1, successRateMultiplier: 1.2, costMultiplier: 1, valueMultiplier: 1 },
+        },
+        {
+          name: "Cost",
+          description: "Infrastructure + harness costs",
+          baseValue: `$${fmt(base.totalMonthlyCost)}/mo`,
+          lowMod: { volumeMultiplier: 1, successRateMultiplier: 1, costMultiplier: 0.8, valueMultiplier: 1 },
+          highMod: { volumeMultiplier: 1, successRateMultiplier: 1, costMultiplier: 1.2, valueMultiplier: 1 },
+        },
+        {
+          name: "Value",
+          description: valueLabel(fullInputs.valueMethod),
+          baseValue: `$${fmt(base.totalMonthlyValue)}/mo`,
+          lowMod: { volumeMultiplier: 1, successRateMultiplier: 1, costMultiplier: 1, valueMultiplier: 0.8 },
+          highMod: { volumeMultiplier: 1, successRateMultiplier: 1, costMultiplier: 1, valueMultiplier: 1.2 },
+        },
+      ];
+
+      const rows = dimensions.map((dim) => {
+        const lowResult = calculateROI(fullInputs, dim.lowMod);
+        const highResult = calculateROI(fullInputs, dim.highMod);
+        const swing = Math.abs(highResult.roiPercentage - lowResult.roiPercentage);
+        return {
+          name: dim.name,
+          description: dim.description,
+          baseValue: dim.baseValue,
+          roiAt80: lowResult.roiPercentage,
+          roiAt120: highResult.roiPercentage,
+          netAt80: lowResult.netMonthlyBenefit,
+          netAt120: highResult.netMonthlyBenefit,
+          swing,
+        };
+      });
+
+      // Sort by swing descending (biggest impact first)
+      rows.sort((a, b) => b.swing - a.swing);
+
+      // Build markdown table
+      const table = [
+        "| Variable | Base Value | ROI at −20% | ROI at +20% | Swing | Net Benefit at −20% | Net Benefit at +20% |",
+        "|----------|-----------|-------------|-------------|-------|---------------------|---------------------|",
+        ...rows.map((r) =>
+          `| ${r.name} | ${r.baseValue} | ${r.roiAt80.toFixed(1)}% | ${r.roiAt120.toFixed(1)}% | ${r.swing.toFixed(1)} pp | $${fmt(r.netAt80)} | $${fmt(r.netAt120)} |`
+        ),
+      ].join("\n");
+
+      const topDriver = rows[0];
+
+      return {
+        structuredContent: {
+          inputs: fullInputs,
+          baseResults: base,
+          sensitivity: rows,
+        },
+        content: [
+          {
+            type: "text",
+            text: [
+              `## ${fullInputs.useCaseName} - Sensitivity Analysis`,
+              "",
+              `**Base scenario:** ROI ${baseROI.toFixed(1)}% | Net monthly benefit $${fmt(baseNetBenefit)}`,
+              "",
+              "Each variable is tested at ±20% from its base value while all others remain constant.",
+              "",
+              table,
+              "",
+              `**Most impactful variable:** ${topDriver.name} (${topDriver.description}) — a ±20% change swings ROI by ${topDriver.swing.toFixed(1)} percentage points.`,
+              "",
+              `> These results are computed using the exact same calculation engine as the ROI dashboard. Report them exactly as shown — do not recalculate or estimate.`,
+              "",
+              `Methodology: https://airoicalculator.optimnow.io | Full formulas: https://github.com/OptimNow/ai-roi-calculator/blob/main/METHODOLOGY.md`,
+            ].join("\n"),
+          },
+        ],
+        isError: false,
+      };
+    } catch (error) {
+      return {
+        content: [{ type: "text", text: `Sensitivity analysis error: ${error}` }],
+        isError: true,
+      };
+    }
+  },
+);
+
+/** Human-readable label for the value dimension based on value method */
+function valueLabel(method: ValueMethod): string {
+  switch (method) {
+    case ValueMethod.COST_DISPLACEMENT:
+      return "Deflection rate & human cost savings";
+    case ValueMethod.REVENUE_UPLIFT:
+      return "Conversion uplift & revenue impact";
+    case ValueMethod.RETENTION:
+      return "Churn reduction & customer retention";
+    case ValueMethod.PREMIUM_MONETIZATION:
+      return "Subscription revenue & margins";
+  }
+}
+
 server.run();
 
 export type AppType = typeof server;
-
-
-
