@@ -4,6 +4,10 @@ An ROI calculator app that runs as an MCP server with widget UIs, compatible wit
 
 Built with [Skybridge](https://docs.skybridge.tech/) and deployed on [Alpic](https://alpic.ai/).
 
+## Demo
+
+[![Watch the demo](https://cdn.loom.com/sessions/thumbnails/9e710b84a1484a0c8f242ec46185e809-with-play.gif)](https://www.loom.com/share/9e710b84a1484a0c8f242ec46185e809)
+
 ## What changed for ChatGPT Apps
 
 This repo is already on the right architecture for ChatGPT Apps:
@@ -60,6 +64,27 @@ The MCP endpoint is `http://localhost:3000/mcp`.
    - Local tunnel example: `https://<your-tunnel-domain>/mcp`
    - Deployed example: `https://<your-domain>/mcp`
 4. Refresh/reconnect after metadata changes.
+
+## Directory submission prep
+
+For ChatGPT directory submission, set these production env vars:
+
+```bash
+PUBLIC_APP_ORIGIN=https://your-app.example.com
+OPENAI_APPS_CHALLENGE=<token from OpenAI>
+```
+
+Optional CSP overrides are also supported:
+
+```bash
+WIDGET_CONNECT_DOMAINS=
+WIDGET_RESOURCE_DOMAINS=
+WIDGET_REDIRECT_DOMAINS=
+WIDGET_FRAME_DOMAINS=
+```
+
+Once configured, the app exposes the domain verification file at `/.well-known/openai-apps-challenge`.
+See `docs/chatgpt-directory-checklist.md` for the repo-specific submission checklist and draft test cases.
 
 ## Connect to Claude Desktop
 

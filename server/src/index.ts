@@ -5,6 +5,16 @@ import { PRESETS, DEFAULT_INPUTS } from "./lib/constants.js";
 import type { UseCaseInputs } from "./lib/types.js";
 import { ValueMethod } from "./lib/types.js";
 
+declare const process: {
+  env: Record<string, string | undefined>;
+};
+
+type TextResponse = {
+  status: (code: number) => TextResponse;
+  type: (contentType: string) => TextResponse;
+  send: (body: string) => void;
+};
+
 const ALL_PRESETS = [
   "support", "knowledgeQA", "meetingSummary", "marketingContent",
   "codingTask", "invoice", "callSummary", "agentWorkflow",
@@ -105,14 +115,76 @@ function buildFullInputs(inputs: z.infer<typeof useCaseInputSchema>): UseCaseInp
 const fmt = (n: number) =>
   n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+const normalizeOrigin = (value?: string) => {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed.replace(/\/+$/, "") : undefined;
+};
+
+const parseOriginList = (value?: string) =>
+  (value ?? "")
+    .split(",")
+    .map((entry) => normalizeOrigin(entry))
+    .filter((entry): entry is string => Boolean(entry));
+
+const publicAppOrigin = normalizeOrigin(process.env.PUBLIC_APP_ORIGIN);
+const widgetConnectDomains = parseOriginList(process.env.WIDGET_CONNECT_DOMAINS);
+const widgetResourceDomains = parseOriginList(process.env.WIDGET_RESOURCE_DOMAINS);
+const widgetRedirectDomains = parseOriginList(process.env.WIDGET_REDIRECT_DOMAINS);
+const widgetFrameDomains = parseOriginList(process.env.WIDGET_FRAME_DOMAINS);
+const openAiAppsChallenge = process.env.OPENAI_APPS_CHALLENGE?.trim();
+
+if (publicAppOrigin) {
+  if (widgetConnectDomains.length === 0) {
+    widgetConnectDomains.push(publicAppOrigin);
+  }
+  if (widgetResourceDomains.length === 0) {
+    widgetResourceDomains.push(publicAppOrigin);
+  }
+}
+
+const widgetUiMeta = {
+  prefersBorder: true,
+  ...(publicAppOrigin ? { domain: publicAppOrigin } : {}),
+  ...(
+    widgetConnectDomains.length > 0 ||
+    widgetResourceDomains.length > 0 ||
+    widgetRedirectDomains.length > 0 ||
+    widgetFrameDomains.length > 0
+      ? {
+          csp: {
+            ...(widgetConnectDomains.length > 0 ? { connectDomains: widgetConnectDomains } : {}),
+            ...(widgetResourceDomains.length > 0 ? { resourceDomains: widgetResourceDomains } : {}),
+            ...(widgetRedirectDomains.length > 0 ? { redirectDomains: widgetRedirectDomains } : {}),
+            ...(widgetFrameDomains.length > 0 ? { frameDomains: widgetFrameDomains } : {}),
+          },
+        }
+      : {}
+  ),
+};
+
 const server = new McpServer(
   { name: "ai-roi-calculator", version: "1.2.0" },
   { capabilities: {} },
 );
 
-const readOnlyAnnotations = { readOnlyHint: true };
+const readOnlyAnnotations = {
+  readOnlyHint: true,
+  openWorldHint: false,
+  destructiveHint: false,
+};
 const appsSdkWidgetUri = "ui://widgets/apps-sdk/calculate-roi-v4.html";
 const mcpAppWidgetUri = "ui://widgets/ext-apps/calculate-roi-v4.html";
+
+const openAiAppsChallengeHandler = (_req: unknown, res: TextResponse) => {
+  if (!openAiAppsChallenge) {
+    res.status(404).type("text/plain").send("OPENAI_APPS_CHALLENGE is not configured.");
+    return;
+  }
+
+  res.type("text/plain").send(openAiAppsChallenge);
+};
+
+server.use("/.well-known/openai-apps-challenge", openAiAppsChallengeHandler);
 
 // ─── Tool 1: Calculate ROI (widget) ────────────────────────────────────────
 
@@ -120,7 +192,7 @@ server.registerWidget(
   "calculate-roi-v4",
   {
     description: "AI ROI Calculator - Interactive dashboard showing ROI metrics",
-    _meta: { ui: { prefersBorder: true } },
+    _meta: { ui: widgetUiMeta },
   },
   {
     title: "Calculate ROI",
@@ -212,14 +284,14 @@ server.registerTool(
   {
     title: "Load ROI preset",
     description:
-      "Load a preset configuration for a common AI use case. " +
+      "Use this when you want the default assumptions for a common AI ROI scenario before applying your own overrides. " +
       "Available presets: support (Customer Support Bot), knowledgeQA (Knowledge Q&A), " +
       "meetingSummary (Meeting Summary), marketingContent (Marketing Content), " +
       "codingTask (Coding Task), invoice (Invoice Processing), " +
       "callSummary (Call Summary), agentWorkflow (Agent Workflow), " +
       "recommendation (E-commerce Recommendations), retention (Customer Retention AI), " +
       "premium (AI Premium Features). " +
-      "Returns raw preset values only and does not render the dashboard.",
+      "Returns the preset inputs together with the standard ROI dashboard payload.",
     inputSchema: {
       preset: z
         .enum(ALL_PRESETS)
@@ -278,7 +350,7 @@ server.registerTool(
   {
     title: "Sensitivity Analysis",
     description:
-      "Run a sensitivity analysis on an AI ROI scenario. " +
+      "Use this when you need to see which assumptions have the biggest impact on ROI for an AI scenario. " +
       "Takes the SAME inputs as 'calculate-roi-v4' (preset + optional overrides) and tests how ROI changes " +
       "when each key variable is varied by ±20%. " +
       "Returns a tornado-style table showing which assumptions have the biggest impact on ROI. " +
