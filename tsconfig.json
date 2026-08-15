@@ -5,5 +5,10 @@
     "outDir": "dist"
   },
 
-  "include": ["server/src", "web/src"]
+  "include": ["server/src", "web/src"],
+
+  // Tests are run by vitest, which transpiles them itself. They have no place in
+  // the server bundle, and compiling them here would drag their dev-only imports
+  // (node:fs and friends) into the production type-check.
+  "exclude": ["**/*.test.ts", "**/*.test.tsx"]
 }
