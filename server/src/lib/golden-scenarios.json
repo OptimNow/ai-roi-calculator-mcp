@@ -4,14 +4,14 @@
     "preset:support": {
       "layer1CostPerUnit": 0.003509,
       "layer2CostPerUnit": 0.009009,
-      "totalCostPerUnit": 0.092342,
+      "totalCostPerUnit": 0.117342,
       "grossValuePerUnit": 0.153,
       "totalMonthlyValue": 1530,
-      "totalMonthlyCost": 923.423333,
-      "netMonthlyBenefit": 606.576667,
-      "roiPercentage": 65.687821,
-      "paybackMonths": "6.9",
-      "breakEvenVolume": 5788
+      "totalMonthlyCost": 1173.423333,
+      "netMonthlyBenefit": 356.576667,
+      "roiPercentage": 30.387726,
+      "paybackMonths": "9.0",
+      "breakEvenVolume": 7524
     },
     "preset:knowledgeQA": {
       "layer1CostPerUnit": 0.005214,
@@ -136,14 +136,14 @@
     "per-call flat rate": {
       "layer1CostPerUnit": 0.022,
       "layer2CostPerUnit": 0.0275,
-      "totalCostPerUnit": 0.110833,
+      "totalCostPerUnit": 0.135833,
       "grossValuePerUnit": 0.153,
       "totalMonthlyValue": 1530,
-      "totalMonthlyCost": 1108.333333,
-      "netMonthlyBenefit": 421.666667,
-      "roiPercentage": 38.045113,
-      "paybackMonths": "8.0",
-      "breakEvenVolume": 6641
+      "totalMonthlyCost": 1358.333333,
+      "netMonthlyBenefit": 171.666667,
+      "roiPercentage": 12.638037,
+      "paybackMonths": "10.4",
+      "breakEvenVolume": 8633
     },
     "batch on a model with published rates": {
       "layer1CostPerUnit": 0.003114,
@@ -160,26 +160,26 @@
     "batch on a model without published rates": {
       "layer1CostPerUnit": 0.003509,
       "layer2CostPerUnit": 0.009009,
-      "totalCostPerUnit": 0.092342,
+      "totalCostPerUnit": 0.117342,
       "grossValuePerUnit": 0.153,
       "totalMonthlyValue": 1530,
-      "totalMonthlyCost": 923.423333,
-      "netMonthlyBenefit": 606.576667,
-      "roiPercentage": 65.687821,
-      "paybackMonths": "6.9",
-      "breakEvenVolume": 5788
+      "totalMonthlyCost": 1173.423333,
+      "netMonthlyBenefit": 356.576667,
+      "roiPercentage": 30.387726,
+      "paybackMonths": "9.0",
+      "breakEvenVolume": 7524
     },
     "routing split 60/40": {
       "layer1CostPerUnit": 0.004913,
       "layer2CostPerUnit": 0.010413,
-      "totalCostPerUnit": 0.093746,
+      "totalCostPerUnit": 0.118746,
       "grossValuePerUnit": 0.153,
       "totalMonthlyValue": 1530,
-      "totalMonthlyCost": 937.459333,
-      "netMonthlyBenefit": 592.540667,
-      "roiPercentage": 63.20708,
-      "paybackMonths": "7.0",
-      "breakEvenVolume": 5845
+      "totalMonthlyCost": 1187.459333,
+      "netMonthlyBenefit": 342.540667,
+      "roiPercentage": 28.846518,
+      "paybackMonths": "9.1",
+      "breakEvenVolume": 7598
     }
   }
 }
