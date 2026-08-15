@@ -1,0 +1,44 @@
+name: CI
+
+# The engine under server/src/lib/ is owned by the AI ROI Calculator and copied
+# here by scripts/sync-engine.mjs. This job is what stops the two drifting apart
+# again: it re-runs the sync against the calculator's main branch and fails if
+# the result differs from what is committed.
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  schedule:
+    # Catches drift introduced by a change on the calculator side, which would
+    # otherwise stay invisible here until someone happened to open a PR.
+    - cron: '0 7 * * 1'
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check out the calculator (engine source of truth)
+        uses: actions/checkout@v4
+        with:
+          repository: OptimNow/ai-roi-calculator
+          path: .calculator
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Engine matches the calculator
+        run: node scripts/sync-engine.mjs --check --from .calculator
+
+      - name: Types
+        run: npx tsc --noEmit -p tsconfig.json
+
+      - name: Tests
+        run: npm test

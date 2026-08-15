@@ -34,7 +34,7 @@ ai-roi-calculator-mcp/
 │   └── src/
 │       ├── index.ts              # MCP server — 3 tool/widget definitions
 │       └── lib/
-│           ├── calculations.ts   # Core ROI formulas (copied from original app)
+│           ├── calculations.ts   # Core ROI formulas — SYNCED, do not edit here
 │           ├── constants.ts      # Preset use cases (support, invoice, etc.)
 │           └── types.ts          # TypeScript interfaces
 ├── web/
@@ -67,6 +67,41 @@ ai-roi-calculator-mcp/
 - **Input:** Same `UseCaseInputs`
 - **Output:** Tornado chart data showing +/-20% variable impact on ROI
 - **Widget:** Tornado chart visualization
+
+## Engine sync — read this before touching server/src/lib/
+
+`calculations.ts`, `types.ts`, `constants.ts` and `modelCatalog.ts` are **copied verbatim**
+from the [AI ROI Calculator](https://github.com/OptimNow/ai-roi-calculator) by
+`scripts/sync-engine.mjs`. Do not edit them here: the next sync overwrites your change.
+
+They used to be hand-maintained copies, and they drifted — the same preset returned a
+7-point different ROI depending on whether you asked the MCP or the web app, and per-call
+pricing was accepted, advertised in the tool schema, then silently ignored (off by 44x).
+
+To change a formula or a preset: change the calculator, merge it, then here run
+
+```
+npm run sync:engine     # copy the current engine in
+npm test                # goldens will fail if figures moved — review, then regenerate
+node scripts/generate-goldens.mjs
+```
+
+`golden-scenarios.json` records the figures every preset must keep producing. It is a
+change detector, not a proof of correctness: when it fails, the diff is the blast radius.
+
+CI runs `npm run sync:engine:check` against the calculator's main branch on every PR and
+weekly, so drift introduced from either side surfaces on its own.
+
+## Model prices
+
+`server/src/catalog.ts` resolves live prices from the AI Pricing Hub catalog (one fetch per
+hour per process; the shared module's localStorage cache does not exist under Node). Every
+path degrades to the embedded snapshot rather than failing a tool call, and `provenance()`
+states which layer answered so a reported figure always carries its price date.
+
+`server/src/deeplink.ts` builds the URL back into the web calculator, mirroring the contract
+validated in the calculator's `utils/deepLink.ts`. Preset keys are mapped to the hub's
+use-case keys (`support` → `supportTicket`, `invoice` → `invoiceProcessing`).
 
 ### Tool 3: `load-preset`
 - **Type:** Data-only tool (no widget)
@@ -118,7 +153,7 @@ Add to `claude_desktop_config.json`:
 
 - No API keys needed — all calculations run server-side
 - No database — stateless tool execution
-- Business logic in `server/src/lib/` must stay in sync with original app formulas
+- Business logic in `server/src/lib/` is generated — see "Engine sync" below
 - Brand color: Chartreuse (#ACE849) for OptimNow identity
 - Widget UIs consume `useToolInfo()` hook from Skybridge (not React props)
 

@@ -1,3 +1,6 @@
+// GENERATED FILE — do not edit here.
+// Synced from the AI ROI Calculator by scripts/sync-engine.mjs.
+// Change the calculator, then run: npm run sync:engine
 export enum ValueMethod {
   COST_DISPLACEMENT = 'Cost Displacement',
   REVENUE_UPLIFT = 'Revenue Uplift',
@@ -12,6 +15,19 @@ export interface ModelParams {
   pricePer1MOutputTokens: number;
   costPerCall: number; // Alternative to token-based
   useCallPricing: boolean;
+
+  // Identity of the model the prices came from (AI Pricing Hub).
+  // All optional: absent means custom/manual pricing (and keeps old saved scenarios valid).
+  modelId?: string; // e.g. "anthropic/claude-haiku-4-5", matches hub model page slugs
+  modelName?: string; // display name, e.g. "Claude Haiku 4.5"
+  provider?: string;
+  pricedAt?: string; // ISO date the prices were published
+
+  // Published optimization rates from the provider (via AI Pricing Hub).
+  // When set, they take precedence over the manual cachedTokenDiscount input.
+  cachedInputPricePer1M?: number; // prompt-cache read price
+  batchInputPricePer1M?: number; // batch API price (typically -50%)
+  batchOutputPricePer1M?: number;
 }
 
 export interface SensitivityModifiers {
@@ -40,7 +56,8 @@ export interface UseCaseInputs {
   secondaryModel: ModelParams;
   routingSimplePercent: number; // 0-100% goes to primary (simple), rest to secondary (complex)
   cacheHitRate: number; // 0-100
-  cachedTokenDiscount: number; // 0-100
+  cachedTokenDiscount: number; // 0-100, fallback used only when a model has no published cache-read price
+  batchProcessing: boolean; // async workload: use batch API prices where the provider publishes them
 
   // 4. Layer 2: Harness (Per Unit)
   orchestrationCostPerUnit: number;
@@ -50,7 +67,7 @@ export interface UseCaseInputs {
   safetyGuardrailsCostPerUnit: number;
   networkEgressCostPerUnit: number;
   storageCostPerUnit: number;
-
+  
   // L2 Multipliers
   retryRate: number; // 0-1.0 (e.g. 0.2 = 20%)
   overheadMultiplier: number; // e.g. 1.1 = 10% overhead
@@ -127,3 +144,4 @@ export interface Scenario {
   createdAt: number;
   color?: string; // For visual differentiation in comparison view
 }
+
