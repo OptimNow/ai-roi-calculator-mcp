@@ -94,7 +94,7 @@ weekly, so drift introduced from either side surfaces on its own.
 
 ## Model prices
 
-`server/src/catalog.ts` resolves live prices from the AI Pricing Hub catalog (one fetch per
+`server/src/catalog.ts` resolves live prices from the OptimToken catalog (one fetch per
 hour per process; the shared module's localStorage cache does not exist under Node). Every
 path degrades to the embedded snapshot rather than failing a tool call, and `provenance()`
 states which layer answered so a reported figure always carries its price date.

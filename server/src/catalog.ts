@@ -96,9 +96,9 @@ export async function listModels(limit = 25): Promise<{ models: CatalogModel[]; 
 export const provenance = (catalog: ModelCatalog): string => {
   const label =
     catalog.source === "live"
-      ? "live from the AI Pricing Hub"
+      ? "live from the OptimToken"
       : catalog.source === "cache"
-        ? "cached from the AI Pricing Hub"
+        ? "cached from the OptimToken"
         : "from the embedded snapshot (hub unreachable)";
   return `Prices ${label}, published ${catalog.pricedAt.slice(0, 10)}.`;
 };
