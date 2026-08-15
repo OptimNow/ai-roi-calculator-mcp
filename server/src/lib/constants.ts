@@ -5,7 +5,7 @@ import type { UseCaseInputs } from './types.js';
 import { ValueMethod } from './types.js';
 import { presetModel } from './modelCatalog.js';
 
-// Preset model params come from the embedded AI Pricing Hub snapshot (utils/modelCatalog.ts),
+// Preset model params come from the embedded OptimToken snapshot (utils/modelCatalog.ts),
 // so every preset carries a real model identity (modelId, provider, pricedAt) and its
 // published cache-read / batch prices. Token profiles (in/out) and cache hit rates are
 // aligned with the hub's business use-case profiles (USE_CASE_PROFILES).
@@ -17,9 +17,9 @@ export const DEFAULT_INPUTS: UseCaseInputs = {
   successRate: 90,
   analysisHorizonMonths: 12,
 
-  integrationCost: 6000,
-  trainingTuningCost: 2500,
-  changeManagementCost: 1500,
+  integrationCost: 8000,
+  trainingTuningCost: 3000,
+  changeManagementCost: 2000,
   amortizationMonths: 12,
 
   primaryModel: presetModel('Anthropic', 'Claude Haiku 4.5', 1500, 500),
@@ -68,10 +68,10 @@ export const PRESETS: Record<string, Partial<UseCaseInputs>> = {
     unitName: 'ticket',
     monthlyVolume: 10000,
     successRate: 90,
-    // SMB support rollout: knowledge base setup, guardrails tuning, and agent enablement
-    integrationCost: 6000,
-    trainingTuningCost: 2500,
-    changeManagementCost: 1500,
+    // SMB support rollout: CRM/ticketing integration, KB setup, routing, guardrails tuning, agent enablement
+    integrationCost: 8000,
+    trainingTuningCost: 3000,
+    changeManagementCost: 2000,
     valueMethod: ValueMethod.COST_DISPLACEMENT,
     baselineHumanCostPerUnit: 0.50,
     deflectionRate: 35,
