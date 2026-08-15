@@ -5,6 +5,7 @@ import { PRESETS, DEFAULT_INPUTS } from "./lib/constants.js";
 import type { ModelParams, UseCaseInputs } from "./lib/types.js";
 import { ValueMethod } from "./lib/types.js";
 import { findModel, getCatalog, provenance } from "./catalog.js";
+import { formatUsd, pluralize } from "./lib/format.js";
 import { calculatorUrl } from "./deeplink.js";
 
 declare const process: {
@@ -184,8 +185,8 @@ function buildFullInputs(
   };
 }
 
-const fmt = (n: number) =>
-  n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+/** Currency including the symbol, sign in front: -$49.20, never $-49.20 */
+const money = (n: number) => formatUsd(n);
 
 const normalizeOrigin = (value?: string) => {
   const trimmed = value?.trim();
@@ -316,16 +317,16 @@ server.registerWidget(
       const summary = [
         `${fullInputs.useCaseName} — ROI Summary`,
         `ROI: ${results.roiPercentage.toFixed(1)}%`,
-        `Net Monthly Benefit: $${fmt(results.netMonthlyBenefit)}`,
-        `Annualized Net Benefit: $${fmt(results.annualizedNetBenefit)}`,
+        `Net Monthly Benefit: ${money(results.netMonthlyBenefit)}`,
+        `Annualized Net Benefit: ${money(results.annualizedNetBenefit)}`,
         `Payback: ${results.paybackMonths} months`,
-        `Break-even Volume: ${results.breakEvenVolume !== undefined ? results.breakEvenVolume.toLocaleString() : "N/A"} ${fullInputs.unitName}s/month`,
-        `Monthly Cost: $${fmt(results.totalMonthlyCost)} | Monthly Value: $${fmt(results.totalMonthlyValue)}`,
+        `Break-even Volume: ${results.breakEvenVolume !== undefined ? results.breakEvenVolume.toLocaleString() : "N/A"} ${pluralize(fullInputs.unitName)}/month`,
+        `Monthly Cost: ${money(results.totalMonthlyCost)} | Monthly Value: ${money(results.totalMonthlyValue)}`,
       ].join(" | ");
 
       const baselineRow =
         baselineMonthlyCost !== undefined
-          ? `| Human Baseline (monthly) | $${fmt(baselineMonthlyCost)} |\n`
+          ? `| Human Baseline (monthly) | ${money(baselineMonthlyCost)} |\n`
           : "";
 
       return {
@@ -346,14 +347,14 @@ server.registerWidget(
               "| Metric | Value |",
               "|--------|-------|",
               `| ROI | ${results.roiPercentage.toFixed(1)}% |`,
-              `| Net Monthly Benefit | $${fmt(results.netMonthlyBenefit)} |`,
-              `| Annualized Net Benefit | $${fmt(results.annualizedNetBenefit)} |`,
+              `| Net Monthly Benefit | ${money(results.netMonthlyBenefit)} |`,
+              `| Annualized Net Benefit | ${money(results.annualizedNetBenefit)} |`,
               `| Payback Period | ${results.paybackMonths} months |`,
-              `| Break-even Volume | ${results.breakEvenVolume !== undefined ? results.breakEvenVolume.toLocaleString() : "N/A"} ${fullInputs.unitName}s/month |`,
-              `| Monthly Cost | $${fmt(results.totalMonthlyCost)} |`,
-              `| Monthly Value | $${fmt(results.totalMonthlyValue)} |`,
+              `| Break-even Volume | ${results.breakEvenVolume !== undefined ? results.breakEvenVolume.toLocaleString() : "N/A"} ${pluralize(fullInputs.unitName)}/month |`,
+              `| Monthly Cost | ${money(results.totalMonthlyCost)} |`,
+              `| Monthly Value | ${money(results.totalMonthlyValue)} |`,
               baselineRow +
-              `| Unit Cost (full stack) | $${results.totalCostPerUnit.toFixed(4)} |`,
+              `| Unit Cost (full stack) | ${money(results.totalCostPerUnit)} |`,
               "",
               `> **Important:** Net benefit already accounts for ${fullInputs.successRate}% success rate, deflection rate, and residual review costs. Do not recompute savings from raw baseline figures.`,
               "",
@@ -423,7 +424,7 @@ server.registerTool(
         }
         const m = found.model;
         const line = (label: string, value?: number) =>
-          value === undefined ? `| ${label} | not published |` : `| ${label} | $${value} |`;
+          value === undefined ? `| ${label} | not published |` : `| ${label} | ${money(value)} |`;
 
         return {
           structuredContent: { model: m, params: found.params, pricedAt: found.pricedAt, source: found.source },
@@ -590,7 +591,7 @@ server.registerTool(
         {
           name: "Volume",
           description: `Monthly ${fullInputs.unitName} volume`,
-          baseValue: `${fullInputs.monthlyVolume.toLocaleString()} ${fullInputs.unitName}s/mo`,
+          baseValue: `${fullInputs.monthlyVolume.toLocaleString()} ${pluralize(fullInputs.unitName)}/mo`,
           lowMod: { volumeMultiplier: 0.8, successRateMultiplier: 1, costMultiplier: 1, valueMultiplier: 1 },
           highMod: { volumeMultiplier: 1.2, successRateMultiplier: 1, costMultiplier: 1, valueMultiplier: 1 },
         },
@@ -604,14 +605,14 @@ server.registerTool(
         {
           name: "Cost",
           description: "Infrastructure + harness costs",
-          baseValue: `$${fmt(base.totalMonthlyCost)}/mo`,
+          baseValue: `${money(base.totalMonthlyCost)}/mo`,
           lowMod: { volumeMultiplier: 1, successRateMultiplier: 1, costMultiplier: 0.8, valueMultiplier: 1 },
           highMod: { volumeMultiplier: 1, successRateMultiplier: 1, costMultiplier: 1.2, valueMultiplier: 1 },
         },
         {
           name: "Value",
           description: valueLabel(fullInputs.valueMethod),
-          baseValue: `$${fmt(base.totalMonthlyValue)}/mo`,
+          baseValue: `${money(base.totalMonthlyValue)}/mo`,
           lowMod: { volumeMultiplier: 1, successRateMultiplier: 1, costMultiplier: 1, valueMultiplier: 0.8 },
           highMod: { volumeMultiplier: 1, successRateMultiplier: 1, costMultiplier: 1, valueMultiplier: 1.2 },
         },
@@ -641,7 +642,7 @@ server.registerTool(
         "| Variable | Base Value | ROI at −20% | ROI at +20% | Swing | Net Benefit at −20% | Net Benefit at +20% |",
         "|----------|-----------|-------------|-------------|-------|---------------------|---------------------|",
         ...rows.map((r) =>
-          `| ${r.name} | ${r.baseValue} | ${r.roiAt80.toFixed(1)}% | ${r.roiAt120.toFixed(1)}% | ${r.swing.toFixed(1)} pp | $${fmt(r.netAt80)} | $${fmt(r.netAt120)} |`
+          `| ${r.name} | ${r.baseValue} | ${r.roiAt80.toFixed(1)}% | ${r.roiAt120.toFixed(1)}% | ${r.swing.toFixed(1)} pp | ${money(r.netAt80)} | ${money(r.netAt120)} |`
         ),
       ].join("\n");
 
@@ -659,7 +660,7 @@ server.registerTool(
             text: [
               `## ${fullInputs.useCaseName} - Sensitivity Analysis`,
               "",
-              `**Base scenario:** ROI ${baseROI.toFixed(1)}% | Net monthly benefit $${fmt(baseNetBenefit)}`,
+              `**Base scenario:** ROI ${baseROI.toFixed(1)}% | Net monthly benefit ${money(baseNetBenefit)}`,
               "",
               "Each variable is tested at ±20% from its base value while all others remain constant.",
               "",

@@ -37,6 +37,9 @@ const FILES = [
   { from: 'utils/calculations.ts', to: 'calculations.ts' },
   { from: 'utils/modelCatalog.ts', to: 'modelCatalog.ts' },
   { from: 'constants.ts', to: 'constants.ts' },
+  // Display rules travel with the numbers: a figure should read the same way
+  // whether it comes back from a tool call or off the web page.
+  { from: 'utils/format.ts', to: 'format.ts' },
 ];
 
 const BANNER = `// GENERATED FILE — do not edit here.
