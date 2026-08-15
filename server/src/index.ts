@@ -2,8 +2,10 @@ import { McpServer } from "skybridge/server";
 import { z } from "zod";
 import { calculateROI } from "./lib/calculations.js";
 import { PRESETS, DEFAULT_INPUTS } from "./lib/constants.js";
-import type { UseCaseInputs } from "./lib/types.js";
+import type { ModelParams, UseCaseInputs } from "./lib/types.js";
 import { ValueMethod } from "./lib/types.js";
+import { findModel, getCatalog, provenance } from "./catalog.js";
+import { calculatorUrl } from "./deeplink.js";
 
 declare const process: {
   env: Record<string, string | undefined>;
@@ -26,8 +28,39 @@ const modelParamsSchema = z.object({
   avgOutputTokensPerUnit: z.number().min(0).optional().describe("Average output tokens per unit"),
   pricePer1MInputTokens: z.number().min(0).optional().describe("Price per 1M input tokens (USD)"),
   pricePer1MOutputTokens: z.number().min(0).optional().describe("Price per 1M output tokens (USD)"),
-  costPerCall: z.number().min(0).optional().describe("Flat cost per API call (alternative to token pricing)"),
-  useCallPricing: z.boolean().optional().describe("Use per-call pricing instead of token-based"),
+  costPerCall: z
+    .number()
+    .min(0)
+    .optional()
+    .describe("Flat cost per request (USD). Only used when useCallPricing is true."),
+  useCallPricing: z
+    .boolean()
+    .optional()
+    .describe(
+      "Bill a flat rate per request instead of per token. Use for per-page OCR, per-image " +
+      "generation, per-minute transcription, or a negotiated per-request contract. " +
+      "Token counts, cache and batch discounts are then ignored; retries still apply.",
+    ),
+  cachedInputPricePer1M: z
+    .number()
+    .min(0)
+    .optional()
+    .describe(
+      "Provider's published prompt-cache read price per 1M input tokens. When set, it is " +
+      "used for the cached share instead of the generic cachedTokenDiscount.",
+    ),
+  batchInputPricePer1M: z
+    .number()
+    .min(0)
+    .optional()
+    .describe("Provider's published batch API input price per 1M tokens (used when batchProcessing is true)"),
+  batchOutputPricePer1M: z
+    .number()
+    .min(0)
+    .optional()
+    .describe("Provider's published batch API output price per 1M tokens"),
+  modelName: z.string().optional().describe("Display name of the model these prices came from"),
+  provider: z.string().optional().describe("Provider of the model these prices came from"),
 });
 
 const useCaseInputSchema = z.object({
@@ -43,6 +76,16 @@ const useCaseInputSchema = z.object({
       "recommendation (E-commerce Recommendations), retention (Customer Retention AI), " +
       "premium (AI Premium Features)"
     ),
+  model: z
+    .string()
+    .optional()
+    .describe(
+      "Model to price the scenario with, looked up live in the AI Pricing Hub catalog. " +
+      "Accepts a catalog id ('anthropic/claude-haiku-4-5') or a name ('Claude Haiku 4.5', " +
+      "'GPT-5.4'). Fills input/output prices plus the provider's published cache-read and " +
+      "batch rates, overriding the preset's model. Use primaryModel instead for a negotiated " +
+      "rate that is not in the catalog.",
+    ),
   useCaseName: z.string().optional().describe("Use case name"),
   unitName: z.string().optional().describe("Unit name"),
   monthlyVolume: z.number().min(0).optional().describe("Monthly transaction volume"),
@@ -57,8 +100,28 @@ const useCaseInputSchema = z.object({
   primaryModel: modelParamsSchema.optional(),
   secondaryModel: modelParamsSchema.optional(),
   routingSimplePercent: z.number().min(0).max(100).optional(),
-  cacheHitRate: z.number().min(0).max(100).optional(),
-  cachedTokenDiscount: z.number().min(0).max(100).optional(),
+  cacheHitRate: z
+    .number()
+    .min(0)
+    .max(100)
+    .optional()
+    .describe("Share of input tokens served from the prompt cache (0-100%)"),
+  cachedTokenDiscount: z
+    .number()
+    .min(0)
+    .max(100)
+    .optional()
+    .describe(
+      "Fallback discount on cached input tokens (0-100%). Ignored when the model carries a " +
+      "published cachedInputPricePer1M.",
+    ),
+  batchProcessing: z
+    .boolean()
+    .optional()
+    .describe(
+      "Async workload: apply the provider's published batch rates (about -50%) where they " +
+      "exist, and halve the cache-read price accordingly.",
+    ),
 
   orchestrationCostPerUnit: z.number().min(0).optional(),
   retrievalCostPerUnit: z.number().min(0).optional(),
@@ -92,16 +155,25 @@ const useCaseInputSchema = z.object({
   nonAiCOGSPerSubscriber: z.number().min(0).optional(),
 });
 
-/** Merge DEFAULT_INPUTS + optional preset + user overrides into complete UseCaseInputs */
-function buildFullInputs(inputs: z.infer<typeof useCaseInputSchema>): UseCaseInputs {
-  const presetData = inputs.preset ? PRESETS[inputs.preset] : undefined;
+/** Merge DEFAULT_INPUTS + optional preset + catalog model + user overrides */
+function buildFullInputs(
+  inputs: z.infer<typeof useCaseInputSchema>,
+  catalogModel?: Partial<ModelParams>,
+): UseCaseInputs {
+  // `preset` selects the base and `model` is a catalog lookup key; neither is an
+  // input field, so they must not travel into the returned object (and out
+  // through structuredContent).
+  const { preset, model: _modelQuery, ...overrides } = inputs;
+  const presetData = preset ? PRESETS[preset] : undefined;
   return {
     ...DEFAULT_INPUTS,
     ...presetData,
-    ...inputs,
+    ...overrides,
     primaryModel: {
       ...DEFAULT_INPUTS.primaryModel,
       ...presetData?.primaryModel,
+      // Catalog prices sit between the preset and the caller's explicit overrides
+      ...catalogModel,
       ...inputs.primaryModel,
     },
     secondaryModel: {
@@ -163,7 +235,7 @@ const widgetUiMeta = {
 };
 
 const server = new McpServer(
-  { name: "ai-roi-calculator", version: "1.2.0" },
+  { name: "ai-roi-calculator", version: "1.3.0" },
   { capabilities: {} },
 );
 
@@ -213,8 +285,28 @@ server.registerWidget(
   },
   async (inputs) => {
     try {
-      const fullInputs = buildFullInputs(inputs);
+      const lookup = inputs.model ? await findModel(inputs.model) : null;
+      if (inputs.model && !lookup) {
+        return {
+          content: [
+            {
+              type: "text",
+              text:
+                `No model matching "${inputs.model}" is in the AI Pricing Hub catalog. ` +
+                `Try a catalog id such as "anthropic/claude-haiku-4-5", or pass explicit ` +
+                `prices via primaryModel instead of a name.`,
+            },
+          ],
+          isError: true,
+        };
+      }
+
+      const fullInputs = buildFullInputs(inputs, lookup?.params);
       const results = calculateROI(fullInputs);
+      const priceNote = lookup
+        ? `${lookup.model.provider} ${lookup.model.model} — ${provenance(await getCatalog())}`
+        : undefined;
+      const openInCalculator = calculatorUrl(fullInputs, inputs.preset);
 
       const baselineMonthlyCost =
         fullInputs.valueMethod === ValueMethod.COST_DISPLACEMENT
@@ -237,7 +329,14 @@ server.registerWidget(
           : "";
 
       return {
-        structuredContent: { inputs: fullInputs, results },
+        structuredContent: {
+          inputs: fullInputs,
+          results,
+          modelPricing: lookup
+            ? { modelId: lookup.params.modelId, pricedAt: lookup.pricedAt, source: lookup.source }
+            : undefined,
+          calculatorUrl: openInCalculator,
+        },
         content: [
           {
             type: "text",
@@ -259,8 +358,11 @@ server.registerWidget(
               `> **Important:** Net benefit already accounts for ${fullInputs.successRate}% success rate, deflection rate, and residual review costs. Do not recompute savings from raw baseline figures.`,
               "",
               `> Report these figures exactly as shown. Do not recalculate or estimate any amounts.`,
+              ...(priceNote ? ["", `> Model priced: ${priceNote}`] : []),
               "",
               `**Summary:** ${summary}`,
+              "",
+              `[Open this scenario in the calculator](${openInCalculator}) — adjust the assumptions and save it.`,
               "",
               `Methodology: https://airoicalculator.optimnow.io | Full formulas: https://github.com/OptimNow/ai-roi-calculator/blob/main/METHODOLOGY.md`,
             ].join("\n"),
@@ -271,6 +373,113 @@ server.registerWidget(
     } catch (error) {
       return {
         content: [{ type: "text", text: `Calculation error: ${error}` }],
+        isError: true,
+      };
+    }
+  },
+);
+
+// ─── Tool: Look up model prices ────────────────────────────────────────────
+
+server.registerTool(
+  "lookup-model-price",
+  {
+    title: "Look up model prices",
+    description:
+      "Use this to find current list prices for an AI model, or to see what is available, " +
+      "before pricing a scenario. Prices come from the AI Pricing Hub catalog and include " +
+      "the provider's published prompt-cache read and batch rates where they exist. " +
+      "Call with a model name to price one model, or with no arguments for the top models " +
+      "by Arena ELO. Report the price date alongside any figure — list prices move.",
+    inputSchema: {
+      model: z
+        .string()
+        .optional()
+        .describe("Model name or catalog id. Omit to list the top models instead."),
+      limit: z.number().min(1).max(50).optional().describe("How many models to list (default 15)"),
+    },
+    annotations: readOnlyAnnotations,
+    _meta: {
+      "openai/toolInvocation/invoking": "Checking model prices",
+      "openai/toolInvocation/invoked": "Model prices retrieved",
+    },
+  },
+  async ({ model, limit }) => {
+    try {
+      const catalog = await getCatalog();
+
+      if (model) {
+        const found = await findModel(model);
+        if (!found) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `No model matching "${model}" is in the catalog. Call this tool without arguments to see what is available.`,
+              },
+            ],
+            isError: true,
+          };
+        }
+        const m = found.model;
+        const line = (label: string, value?: number) =>
+          value === undefined ? `| ${label} | not published |` : `| ${label} | $${value} |`;
+
+        return {
+          structuredContent: { model: m, params: found.params, pricedAt: found.pricedAt, source: found.source },
+          content: [
+            {
+              type: "text",
+              text: [
+                `## ${m.provider} ${m.model}`,
+                "",
+                "| Price (per 1M tokens) | USD |",
+                "|---|---|",
+                line("Input", m.inputPricePer1M),
+                line("Output", m.outputPricePer1M),
+                line("Batch input", m.batchInputPricePer1M),
+                line("Batch output", m.batchOutputPricePer1M),
+                line("Prompt-cache read", m.cachedInputPricePer1M),
+                "",
+                `Context ${m.contextWindow ?? "n/a"} · ${m.category ?? "uncategorised"}${m.eloScore ? ` · Arena ELO ${m.eloScore}` : ""}`,
+                "",
+                `> ${provenance(catalog)}`,
+                "",
+                `To price a business case on this model, call the ROI calculator tool with model: "${found.params.modelId}".`,
+              ].join("\n"),
+            },
+          ],
+          isError: false,
+        };
+      }
+
+      const top = catalog.models.slice(0, limit ?? 15);
+      return {
+        structuredContent: { models: top, pricedAt: catalog.pricedAt, source: catalog.source },
+        content: [
+          {
+            type: "text",
+            text: [
+              `## Top ${top.length} models by Arena ELO (of ${catalog.models.length})`,
+              "",
+              "| Model | Provider | In $/1M | Out $/1M | Cache read | ELO |",
+              "|---|---|---|---|---|---|",
+              ...top.map(
+                (m) =>
+                  `| ${m.model} | ${m.provider} | ${m.inputPricePer1M} | ${m.outputPricePer1M} | ${m.cachedInputPricePer1M ?? "—"} | ${m.eloScore ?? "—"} |`,
+              ),
+              "",
+              `> ${provenance(catalog)}`,
+              "",
+              `Full comparison: https://aipricinghub.optimnow.io`,
+            ].join("\n"),
+          },
+        ],
+        isError: false,
+      };
+    } catch (error) {
+      return {
+        content: [{ type: "text", text: `Could not reach the pricing catalog: ${error}` }],
         isError: true,
       };
     }

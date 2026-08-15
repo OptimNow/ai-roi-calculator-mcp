@@ -1,4 +1,10 @@
-import type { UseCaseInputs, CalculationResults, SensitivityModifiers } from './types.js';
+// GENERATED FILE — do not edit here.
+// Synced from the AI ROI Calculator by scripts/sync-engine.mjs.
+// Change the calculator, then run: npm run sync:engine
+// Type-only imports are explicit so this module stays consumable under
+// verbatimModuleSyntax — it is shared verbatim with the MCP server, which
+// compiles with stricter settings than the app's own build.
+import type { UseCaseInputs, CalculationResults, SensitivityModifiers, ModelParams } from './types.js';
 import { ValueMethod } from './types.js';
 
 /**
@@ -35,7 +41,11 @@ import { ValueMethod } from './types.js';
  * ```
  *
  * @remarks
- * - Cache savings apply only to input tokens, not output tokens
+ * - Cache savings apply only to input tokens, not output tokens. When a model carries a
+ *   published cache-read price (from the AI Pricing Hub), that price is used; otherwise the
+ *   manual cachedTokenDiscount applies. Same formula as the hub's "optimized" cost.
+ * - Batch processing swaps in the provider's published batch prices (typically -50%) and
+ *   halves the cache-read price, only where those rates exist.
  * - Retry rate multiplies Layer 1 costs only, not harness costs
  * - Success rate affects value realization but not base costs
  * - Payback calculation uses one-time fixed costs / monthly cash net benefit (before fixed-cost amortization)
@@ -52,7 +62,6 @@ export const calculateROI = (inputs: UseCaseInputs, modifiers: SensitivityModifi
     routingSimplePercent,
     cacheHitRate,
     cachedTokenDiscount,
-    // retryRate and overheadMultiplier accessed via inputs.* below
     amortizationMonths,
     integrationCost,
     trainingTuningCost,
@@ -63,25 +72,56 @@ export const calculateROI = (inputs: UseCaseInputs, modifiers: SensitivityModifi
   const effectiveSuccessRate = Math.min(100, Math.max(0, successRate * modifiers.successRateMultiplier));
 
   // --- Layer 1: Model Cost ---
-  // Routing shares
+  // Blended Base Cost
   const primaryShare = routingSimplePercent / 100;
   const secondaryShare = 1 - primaryShare;
 
-  // Apply Cache Savings (only to input tokens, not output)
-  // Calculate input and output costs separately for proper cache handling
-  const primaryInputCost = (primaryModel.avgInputTokensPerUnit / 1_000_000) * primaryModel.pricePer1MInputTokens * modifiers.costMultiplier;
-  const primaryOutputCost = (primaryModel.avgOutputTokensPerUnit / 1_000_000) * primaryModel.pricePer1MOutputTokens * modifiers.costMultiplier;
-  const secondaryInputCost = (secondaryModel.avgInputTokensPerUnit / 1_000_000) * secondaryModel.pricePer1MInputTokens * modifiers.costMultiplier;
-  const secondaryOutputCost = (secondaryModel.avgOutputTokensPerUnit / 1_000_000) * secondaryModel.pricePer1MOutputTokens * modifiers.costMultiplier;
+  const batchProcessing = inputs.batchProcessing === true;
+
+  // Apply cache savings only to token-priced model input tokens.
+  // Call-priced models have no token breakdown, so they are unaffected by cache/batch settings.
+  // Cache/batch logic mirrors the AI Pricing Hub's optimizedUseCaseCost():
+  // - batch swaps in published batch prices (only where they exist)
+  // - a published cache-read price wins over the manual discount, and is halved under batch
+  const modelCostComponents = (model: ModelParams) => {
+    if (model.useCallPricing) {
+      return {
+        inputCost: 0,
+        outputCost: 0,
+        callCost: model.costPerCall * modifiers.costMultiplier,
+      };
+    }
+
+    const useBatch = batchProcessing
+      && model.batchInputPricePer1M !== undefined
+      && model.batchOutputPricePer1M !== undefined;
+    const baseInputPrice = useBatch ? model.batchInputPricePer1M! : model.pricePer1MInputTokens;
+    const baseOutputPrice = useBatch ? model.batchOutputPricePer1M! : model.pricePer1MOutputTokens;
+
+    const hitRate = cacheHitRate / 100;
+    const cacheReadPrice = model.cachedInputPricePer1M !== undefined
+      ? model.cachedInputPricePer1M * (useBatch ? 0.5 : 1)
+      : baseInputPrice * (1 - cachedTokenDiscount / 100);
+    const effectiveInputPrice = cacheReadPrice * hitRate + baseInputPrice * (1 - hitRate);
+
+    return {
+      inputCost: (model.avgInputTokensPerUnit / 1_000_000) * effectiveInputPrice * modifiers.costMultiplier,
+      outputCost: (model.avgOutputTokensPerUnit / 1_000_000) * baseOutputPrice * modifiers.costMultiplier,
+      callCost: 0,
+    };
+  };
+
+  const primaryCost = modelCostComponents(primaryModel);
+  const secondaryCost = modelCostComponents(secondaryModel);
 
   // Blend by routing
-  const blendedInputCost = (primaryInputCost * primaryShare) + (secondaryInputCost * secondaryShare);
-  const blendedOutputCost = (primaryOutputCost * primaryShare) + (secondaryOutputCost * secondaryShare);
+  const blendedInputCost = (primaryCost.inputCost * primaryShare) + (secondaryCost.inputCost * secondaryShare);
+  const blendedOutputCost = (primaryCost.outputCost * primaryShare) + (secondaryCost.outputCost * secondaryShare);
+  const blendedCallCost = (primaryCost.callCost * primaryShare) + (secondaryCost.callCost * secondaryShare);
 
-  // Apply cache savings only to input tokens
-  const cacheSavingsFactor = (cacheHitRate / 100) * (cachedTokenDiscount / 100);
-  const cachedInputCost = blendedInputCost * (1 - cacheSavingsFactor);
-  const layer1CostPerUnit = cachedInputCost + blendedOutputCost;
+  // Retries duplicate model calls, so they belong to Layer 1 (per METHODOLOGY C₁),
+  // not to harness costs (storage, logging, etc. are not re-incurred).
+  const layer1CostPerUnit = (blendedInputCost + blendedOutputCost + blendedCallCost) * (1 + inputs.retryRate);
 
   // --- Layer 2: Harness Cost ---
   const harnessSum = (
@@ -94,12 +134,8 @@ export const calculateROI = (inputs: UseCaseInputs, modifiers: SensitivityModifi
     inputs.storageCostPerUnit
   ) * modifiers.costMultiplier;
 
-  // Apply Retries only to Layer 1 (model inference), not harness costs
-  // Retries duplicate model calls but not necessarily storage, logging, etc.
-  const layer1WithRetries = layer1CostPerUnit * (1 + inputs.retryRate);
-
-  // Apply Overhead Multiplier to combined cost
-  const layer2CostPerUnit = (layer1WithRetries + harnessSum) * inputs.overheadMultiplier;
+  // Apply Overhead Multiplier to combined cost (Layer 2 is cumulative: it includes Layer 1)
+  const layer2CostPerUnit = (layer1CostPerUnit + harnessSum) * inputs.overheadMultiplier;
 
   // Fixed Costs
   const totalFixedOneTime = integrationCost + trainingTuningCost + changeManagementCost;
@@ -171,7 +207,6 @@ export const calculateROI = (inputs: UseCaseInputs, modifiers: SensitivityModifi
         break;
     }
   }
-
   const netValuePerUnit = grossValuePerUnit; // Success factor already applied inside cases
   const monthlyCashNetBenefit = totalMonthlyValue - layer2MonthlyCost;
   const netMonthlyBenefit = totalMonthlyValue - totalMonthlyCost;
@@ -254,7 +289,4 @@ export const calculateROI = (inputs: UseCaseInputs, modifiers: SensitivityModifi
     breakEvenMonths
   };
 };
-
-
-
 
