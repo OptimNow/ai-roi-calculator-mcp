@@ -23,7 +23,7 @@ Language:     TypeScript
 Build:        Vite + Skybridge plugins
 UI:           React widgets (rendered via structuredContent)
 Deployment:   Alpic Cloud
-Transport:    SSE (Server-Sent Events) at root URL /
+Transport:    Streamable HTTP with SSE responses, at /mcp
 ```
 
 ### Project Structure
@@ -32,41 +32,55 @@ Transport:    SSE (Server-Sent Events) at root URL /
 ai-roi-calculator-mcp/
 ├── server/
 │   └── src/
-│       ├── index.ts              # MCP server — 3 tool/widget definitions
-│       └── lib/
-│           ├── calculations.ts   # Core ROI formulas — SYNCED, do not edit here
-│           ├── constants.ts      # Preset use cases (support, invoice, etc.)
-│           └── types.ts          # TypeScript interfaces
-├── web/
-│   └── src/
-│       ├── helpers.ts            # Skybridge widget helpers
-│       ├── index.css             # Widget styles
-│       └── widgets/
-│           ├── calculate-roi/
-│           │   └── index.tsx     # ROI dashboard widget UI
-│           └── sensitivity-analysis/
-│               └── index.tsx     # Tornado chart widget UI
+│       ├── index.ts              # MCP server — 1 widget + 3 tools
+│       ├── catalog.ts            # Live OptimToken prices, process cache, snapshot fallback
+│       ├── deeplink.ts           # Builds the link back into the web calculator
+│       └── lib/                  # GENERATED — see "Engine sync" below, never edit here
+│           ├── calculations.ts   # Core ROI formulas
+│           ├── constants.ts      # The 11 presets
+│           ├── modelCatalog.ts   # Catalog fetch, cache, embedded snapshot
+│           ├── format.ts         # pluralize() + Intl money formatters
+│           ├── types.ts          # TypeScript interfaces
+│           └── golden-scenarios.json  # Reference figures the engine must reproduce
+├── web/src/widgets/
+│   └── calculate-roi-v4/         # The only widget. Unregistered folders get deleted.
+├── scripts/
+│   ├── sync-engine.mjs           # Copies the engine from the calculator (--check for CI)
+│   └── generate-goldens.mjs      # Regenerates golden-scenarios.json
+├── .github/workflows/ci.yml      # Drift check + types + tests, per PR and weekly
 ├── alpic.json                    # Alpic deployment config
-├── package.json
-├── tsconfig.json
+├── tsconfig.json                 # Excludes *.test.ts from the server build
 └── vite.config.ts                # Skybridge Vite plugin
 ```
+
+Tests live beside the code: `server/src/lib/engine.test.ts`, `server/src/catalog.test.ts`,
+`server/src/formatting.test.ts`. Three of them are regression guards that fail if a hand-built
+`$` prefix or a naive `unitName + "s"` reappears, or if the registered widget list stops
+matching what has source.
 
 ---
 
 ## MCP Tools
 
-### Tool 1: `calculate-roi`
-- **Type:** Widget (has UI)
-- **Input:** Full `UseCaseInputs` (volume, model pricing, harness costs, value method, fixed costs)
-- **Output:** ROI%, payback period, break-even volume, cost breakdown, net benefit
-- **Widget:** KPI dashboard cards + cost breakdown
+Four are registered. Only one has a widget: `web/src/widgets/` holds exactly one folder, and
+three superseded `calculate-roi` versions were once compiled into the bundle with nothing
+registering them. If a folder is not registered in `index.ts`, delete it.
 
-### Tool 2: `sensitivity-analysis`
-- **Type:** Widget (has UI)
-- **Input:** Same `UseCaseInputs`
-- **Output:** Tornado chart data showing +/-20% variable impact on ROI
-- **Widget:** Tornado chart visualization
+| Tool | Registration | Notes |
+|---|---|---|
+| `calculate-roi-v4` | `registerWidget` | The only widget. Full ROI, payback, break-even volume, net benefit, cost breakdown. Accepts a `model` argument resolved against the catalog by id **or by name**, since an assistant knows "Claude Haiku 4.5" and not the slug. |
+| `lookup-model-price` | `registerTool` | List, batch and prompt-cache prices for one model, or the top models by ELO. |
+| `load-preset` | `registerTool` | Returns one of **11** presets without computing. |
+| `sensitivity-analysis` | `registerTool` | Impact ranking at ±20%. No widget, despite the name matching a folder that used to exist. |
+
+All four are read-only (`readOnlyHint`) and take no credentials.
+
+**Presets:** support, knowledgeQA, meetingSummary, marketingContent, codingTask, invoice,
+callSummary, agentWorkflow, recommendation, retention, premium.
+
+Every `calculate-roi-v4` response ends with a deep link back into the web calculator, built by
+`deeplink.ts`. Preset keys are mapped to the hub's use-case keys there (`support` →
+`supportTicket`, `invoice` → `invoiceProcessing`).
 
 ## Engine sync — read this before touching server/src/lib/
 
@@ -102,13 +116,6 @@ states which layer answered so a reported figure always carries its price date.
 `server/src/deeplink.ts` builds the URL back into the web calculator, mirroring the contract
 validated in the calculator's `utils/deepLink.ts`. Preset keys are mapped to the hub's
 use-case keys (`support` → `supportTicket`, `invoice` → `invoiceProcessing`).
-
-### Tool 3: `load-preset`
-- **Type:** Data-only tool (no widget)
-- **Input:** Preset name (support, invoice, recommendation, retention, premium)
-- **Output:** Pre-filled `UseCaseInputs` defaults
-
----
 
 ## Development
 
