@@ -81,7 +81,7 @@ const useCaseInputSchema = z.object({
     .string()
     .optional()
     .describe(
-      "Model to price the scenario with, looked up live in the AI Pricing Hub catalog. " +
+      "Model to price the scenario with, looked up live in the OptimToken catalog. " +
       "Accepts a catalog id ('anthropic/claude-haiku-4-5') or a name ('Claude Haiku 4.5', " +
       "'GPT-5.4'). Fills input/output prices plus the provider's published cache-read and " +
       "batch rates, overriding the preset's model. Use primaryModel instead for a negotiated " +
@@ -293,7 +293,7 @@ server.registerWidget(
             {
               type: "text",
               text:
-                `No model matching "${inputs.model}" is in the AI Pricing Hub catalog. ` +
+                `No model matching "${inputs.model}" is in the OptimToken catalog. ` +
                 `Try a catalog id such as "anthropic/claude-haiku-4-5", or pass explicit ` +
                 `prices via primaryModel instead of a name.`,
             },
@@ -388,7 +388,7 @@ server.registerTool(
     title: "Look up model prices",
     description:
       "Use this to find current list prices for an AI model, or to see what is available, " +
-      "before pricing a scenario. Prices come from the AI Pricing Hub catalog and include " +
+      "before pricing a scenario. Prices come from the OptimToken catalog and include " +
       "the provider's published prompt-cache read and batch rates where they exist. " +
       "Call with a model name to price one model, or with no arguments for the top models " +
       "by Arena ELO. Report the price date alongside any figure — list prices move.",
@@ -472,7 +472,7 @@ server.registerTool(
               "",
               `> ${provenance(catalog)}`,
               "",
-              `Full comparison: https://aipricinghub.optimnow.io`,
+              `Full comparison: https://optimtoken.optimnow.io`,
             ].join("\n"),
           },
         ],
