@@ -2,7 +2,7 @@
 
 **Project:** AI ROI Calculator MCP
 **Framework:** Skybridge (MCP App Framework)
-**Repo:** github.com/OptimNow/ai-roi-calculator-mcp (private)
+**Repo:** github.com/OptimNow/ai-roi-calculator-mcp — **still private** as of August 15, 2026
 **Deployed:** https://ai-roi-calculator-mc-e9dd36e7.alpic.live
 
 ---
@@ -12,6 +12,11 @@
 An MCP (Model Context Protocol) app that exposes AI ROI calculation tools as interactive widgets inside AI conversations (Claude, ChatGPT, VS Code, Goose). Built with Skybridge framework.
 
 **Origin:** Business logic copied from the standalone web app [ai-roi-calculator](https://github.com/OptimNow/ai-roi-calculator). The original app remains untouched.
+
+> **README.md is written for a public audience but the repo is private.** Until someone flips
+> visibility, the CI and stars badges render broken for anyone who is not a collaborator, and
+> the calculator's README deliberately does not link here. Either publish the repo or trim the
+> README — do not leave the two describing different worlds.
 
 ---
 
@@ -53,10 +58,10 @@ ai-roi-calculator-mcp/
 └── vite.config.ts                # Skybridge Vite plugin
 ```
 
-Tests live beside the code: `server/src/lib/engine.test.ts`, `server/src/catalog.test.ts`,
-`server/src/formatting.test.ts`. Three of them are regression guards that fail if a hand-built
-`$` prefix or a naive `unitName + "s"` reappears, or if the registered widget list stops
-matching what has source.
+Tests live beside the code: `server/src/lib/engine.test.ts`, `server/src/catalog.test.ts` and
+`server/src/formatting.test.ts`. `npm test` runs 35 of them across those 3 files. Several are
+regression guards rather than unit tests: they fail if a hand-built `$` prefix or a naive
+`unitName + "s"` reappears, or if the registered widget list stops matching what has source.
 
 ---
 
@@ -84,9 +89,10 @@ Every `calculate-roi-v4` response ends with a deep link back into the web calcul
 
 ## Engine sync — read this before touching server/src/lib/
 
-`calculations.ts`, `types.ts`, `constants.ts` and `modelCatalog.ts` are **copied verbatim**
-from the [AI ROI Calculator](https://github.com/OptimNow/ai-roi-calculator) by
-`scripts/sync-engine.mjs`. Do not edit them here: the next sync overwrites your change.
+Five files — `types.ts`, `calculations.ts`, `modelCatalog.ts`, `constants.ts` and `format.ts` —
+are **copied verbatim** from the [AI ROI Calculator](https://github.com/OptimNow/ai-roi-calculator)
+by `scripts/sync-engine.mjs` (see its `FILES` table for the authoritative list). Do not edit
+them here: the next sync overwrites your change.
 
 They used to be hand-maintained copies, and they drifted — the same preset returned a
 7-point different ROI depending on whether you asked the MCP or the web app, and per-call
@@ -132,7 +138,11 @@ npm run start      # Start production server
 npx alpic deploy --yes --project-name ai-roi-calculator-mcp
 ```
 
-Deploys to Alpic Cloud. SSE endpoint is served at root `/`.
+Deploys to Alpic Cloud. `npm run deploy` wraps the same command.
+
+**Endpoint.** Both `/` and `/mcp` accept the MCP POST and answer 200. Quote `/mcp` everywhere
+user-facing, because that is what README.md and the connector instructions give people. A GET
+on `/mcp` returns 405, which is correct rather than broken: the transport is POST-only.
 
 ### Connecting to Claude Desktop
 
@@ -140,7 +150,7 @@ Add to `claude_desktop_config.json`:
 ```json
 "ai-roi-calculator": {
   "command": "cmd",
-  "args": ["/c", "npx", "mcp-remote", "https://ai-roi-calculator-mc-e9dd36e7.alpic.live/"]
+  "args": ["/c", "npx", "mcp-remote", "https://ai-roi-calculator-mc-e9dd36e7.alpic.live/mcp"]
 }
 ```
 
@@ -168,9 +178,13 @@ Add to `claude_desktop_config.json`:
 
 ## Dependencies
 
+Requires **Node.js >= 24.14.0** (`engines` in package.json).
+
 - `skybridge` — MCP app framework
 - `@modelcontextprotocol/sdk` — MCP protocol SDK
 - `zod` — Input schema validation
 - `react`, `react-dom` — Widget UI rendering
 - `vite` — Build tooling
-- `alpic` — Deployment CLI (devDependency)
+
+Dev only: `alpic` (deployment CLI), `@skybridge/devtools`, `vitest` (test runner),
+`esbuild` (bundles the engine for `generate-goldens.mjs`), `tsx`, `typescript`.
