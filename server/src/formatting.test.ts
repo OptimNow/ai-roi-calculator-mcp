@@ -38,6 +38,31 @@ describe('unit names in tool output', () => {
   });
 });
 
+describe('optional metrics in tool output', () => {
+  it('reaches break-even volume through a guarded cell, never inline', () => {
+    // breakEvenVolume is absent under Retention Uplift. Touched directly from an
+    // output template it would print "undefined" into the sentence an assistant
+    // reads aloud, rather than failing where someone would notice.
+    const outputLines = indexSource
+      .split('\n')
+      .filter(line => line.includes('Break-even Volume'));
+
+    expect(outputLines.length).toBeGreaterThan(0);
+    outputLines.forEach(line => {
+      expect(line, line.trim()).not.toMatch(/results\.breakEvenVolume/);
+    });
+
+    expect(indexSource).toMatch(/results\.breakEvenVolume !== undefined/);
+  });
+
+  it('says why the volume is absent instead of a bare N/A', () => {
+    // "N/A" reads as "not reachable" — a warning — on a retention scenario that
+    // may be comfortably profitable. The two absences mean different things.
+    expect(indexSource).toMatch(/retention value is not volume-driven/);
+    expect(indexSource).toMatch(/not reachable at any volume/);
+  });
+});
+
 describe('widget registrations', () => {
   it('registers exactly the widgets that still have source', () => {
     // Three superseded calculate-roi versions were still being compiled into

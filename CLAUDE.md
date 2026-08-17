@@ -73,7 +73,7 @@ registering them. If a folder is not registered in `index.ts`, delete it.
 
 | Tool | Registration | Notes |
 |---|---|---|
-| `calculate-roi-v4` | `registerWidget` | The only widget. Full ROI, payback, break-even volume, net benefit, cost breakdown. Accepts a `model` argument resolved against the catalog by id **or by name**, since an assistant knows "Claude Haiku 4.5" and not the slug. |
+| `calculate-roi-v4` | `registerWidget` | The only widget. Full ROI, payback, net benefit, cost breakdown, and a break-even volume — **absent under `ValueMethod.RETENTION`**, see below. Accepts a `model` argument resolved against the catalog by id **or by name**, since an assistant knows "Claude Haiku 4.5" and not the slug. |
 | `lookup-model-price` | `registerTool` | List, batch and prompt-cache prices for one model, or the top models by ELO. |
 | `load-preset` | `registerTool` | Returns one of **11** presets without computing. |
 | `sensitivity-analysis` | `registerTool` | Impact ranking at ±20%. No widget, despite the name matching a folder that used to exist. |
@@ -86,6 +86,29 @@ callSummary, agentWorkflow, recommendation, retention, premium.
 Every `calculate-roi-v4` response ends with a deep link back into the web calculator, built by
 `deeplink.ts`. Preset keys are mapped to the hub's use-case keys there (`support` →
 `supportTicket`, `invoice` → `invoiceProcessing`).
+
+### `breakEvenVolume` is optional — the only nullable figure in the results
+
+`CalculationResults.breakEvenVolume` is `number | undefined`, and it is `undefined` for
+`ValueMethod.RETENTION` (the `retention` preset). The break-even derivation cancels volume off
+both sides of the equation, which only holds while `grossValuePerUnit` is volume-invariant.
+Under Retention it is not: the total comes from `customersImpactedPerMonth` and the unit value
+is back-derived by dividing by volume, so there is no threshold of that shape to report.
+
+Two consequences for anything that renders results:
+
+- **Never interpolate it directly.** A template literal or `.toLocaleString()` on `undefined`
+  prints the word "undefined" into a sentence an assistant then reads aloud — it degrades
+  quietly instead of failing where someone would notice. `server/src/index.ts` routes it
+  through a single guarded `breakEvenCell`, and `formatting.test.ts` guards that.
+- **Absent does not mean unreachable.** The other absence — unit margin never covering the
+  fixed cost — is a genuine warning. Retention is not: the shipped preset clears +$1,220/month
+  at 40% ROI with no break-even volume at all. The widget and the tool text say which of the
+  two applies; a shared "N/A" would let the reader hear the alarming one.
+
+The goldens do not cover this on their own: `engine.test.ts` iterates the keys a golden
+*contains*, so a metric that reappears is not caught. `engine.test.ts` asserts the absence
+explicitly instead.
 
 ## Engine sync — read this before touching server/src/lib/
 
