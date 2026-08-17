@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { calculateROI } from './calculations.js';
 import { DEFAULT_INPUTS, PRESETS } from './constants.js';
 import type { UseCaseInputs } from './types.js';
+import { ValueMethod } from './types.js';
 import goldens from './golden-scenarios.json' with { type: 'json' };
 
 /**
@@ -18,6 +19,9 @@ import goldens from './golden-scenarios.json' with { type: 'json' };
 
 const preset = (key: string): UseCaseInputs =>
   ({ ...DEFAULT_INPUTS, ...(PRESETS as Record<string, Partial<UseCaseInputs>>)[key] } as UseCaseInputs);
+
+const scenarioFor = (name: string): Record<string, unknown> =>
+  (goldens.scenarios as Record<string, Record<string, unknown>>)[name];
 
 describe('golden scenarios', () => {
   const scenarios = goldens.scenarios as Record<string, Record<string, unknown>>;
@@ -41,6 +45,60 @@ describe('golden scenarios', () => {
         }
       });
     });
+  });
+});
+
+/**
+ * The goldens only assert the keys they contain, so an absent metric is not
+ * covered by them: if breakEvenVolume came back for Retention again, every
+ * golden would still pass. These assert the absence itself.
+ */
+describe('break-even volume under Retention Uplift', () => {
+  it('is undefined for retention presets and a number everywhere else', () => {
+    Object.keys(PRESETS).forEach(key => {
+      const inputs = preset(key);
+      const { breakEvenVolume } = calculateROI(inputs);
+
+      if (inputs.valueMethod === ValueMethod.RETENTION) {
+        // Cf_amortized / (GV - C2) cancels volume off both sides, which is only
+        // valid while grossValuePerUnit is volume-invariant. Under Retention the
+        // total comes from customersImpactedPerMonth and the unit value is
+        // back-derived by dividing by volume, so the equation has no solution of
+        // that shape and the figure it used to print pointed the wrong way.
+        expect(breakEvenVolume, key).toBeUndefined();
+      } else {
+        expect(breakEvenVolume, key).toBeTypeOf('number');
+      }
+    });
+  });
+
+  it('omits the metric from the retention golden rather than recording a stale number', () => {
+    expect(scenarioFor('preset:retention')).not.toHaveProperty('breakEvenVolume');
+  });
+});
+
+describe('churn reduction cap', () => {
+  const retention = (churnReductionAbsolute: number): UseCaseInputs => ({
+    ...preset('retention'),
+    churnReductionAbsolute,
+  });
+
+  it('cannot retain more customers than were churning', () => {
+    // baselineChurnRate was declared but never read: a 5-point reduction against
+    // a 2.5-point baseline "saved" customers out of a negative churn rate.
+    const capped = calculateROI(retention(5)).totalMonthlyValue;
+    const atBaseline = calculateROI(retention(2.5)).totalMonthlyValue;
+
+    expect(capped).toBeCloseTo(atBaseline, 5);
+  });
+
+  it('leaves a reduction below the baseline untouched', () => {
+    // The shipped preset sits at 0.5 against a 2.5 baseline, which is why no
+    // golden figure moved when the cap landed.
+    const half = calculateROI(retention(0.5)).totalMonthlyValue;
+    const full = calculateROI(retention(2.5)).totalMonthlyValue;
+
+    expect(half).toBeCloseTo(full / 5, 5);
   });
 });
 

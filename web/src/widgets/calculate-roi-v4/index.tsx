@@ -100,7 +100,13 @@ function ROIDashboard() {
         <KPICard
           label="Unit Break-even"
           value={results.breakEvenVolume !== undefined ? results.breakEvenVolume.toLocaleString() : "N/A"}
-          subtitle={`${inputs.unitName}s/mo needed`}
+          subtitle={
+            results.breakEvenVolume !== undefined
+              ? `${inputs.unitName}s/mo needed`
+              : inputs.valueMethod === "Retention Uplift"
+                ? "not volume-driven"
+                : "not reachable"
+          }
           color="#0f172a"
         />
       </div>
@@ -109,6 +115,7 @@ function ROIDashboard() {
         isReached={results.breakEvenVolume !== undefined && results.effectiveMonthlyVolume >= results.breakEvenVolume}
         currentVolume={results.effectiveMonthlyVolume}
         breakEvenVolume={results.breakEvenVolume}
+        valueMethod={inputs.valueMethod}
         unitName={inputs.unitName}
         paybackMonths={results.paybackMonths}
         analysisHorizonMonths={horizonMonths}
@@ -249,6 +256,7 @@ function BreakEvenBanner({
   isReached,
   currentVolume,
   breakEvenVolume,
+  valueMethod,
   unitName,
   paybackMonths,
   analysisHorizonMonths,
@@ -256,14 +264,33 @@ function BreakEvenBanner({
   isReached: boolean;
   currentVolume: number;
   breakEvenVolume?: number;
+  valueMethod: string;
   unitName: string;
   paybackMonths: number | string;
   analysisHorizonMonths: number;
 }) {
   if (breakEvenVolume === undefined) {
+    // Two different absences share this field. Under Retention Uplift the value
+    // comes from customers retained, not from volume, so no volume threshold
+    // exists — that is a note, not a warning, and the scenario may well be
+    // comfortably profitable. Everywhere else, an absent threshold does mean the
+    // unit margin never covers the fixed cost, which is worth alarming about.
+    const notApplicable = valueMethod === "Retention Uplift";
     return (
-      <div style={{ fontSize: "13px", padding: "12px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "10px", marginBottom: "16px" }}>
-        Break-even is not reachable with the current economics.
+      <div
+        style={{
+          fontSize: "13px",
+          padding: "12px",
+          background: notApplicable ? "#f8fafc" : "#fef2f2",
+          border: notApplicable ? "1px solid #e2e8f0" : "1px solid #fecaca",
+          color: notApplicable ? "#334155" : "inherit",
+          borderRadius: "10px",
+          marginBottom: "16px",
+        }}
+      >
+        {notApplicable
+          ? "Unit break-even does not apply here: retention value scales with the customers you keep, not with monthly volume, so there is no volume threshold to cross."
+          : "Break-even is not reachable with the current economics."}
       </div>
     );
   }

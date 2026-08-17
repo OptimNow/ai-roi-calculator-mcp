@@ -118,8 +118,7 @@
       "totalMonthlyCost": 3029.969867,
       "netMonthlyBenefit": 1220.030133,
       "roiPercentage": 40.265421,
-      "paybackMonths": "8.5",
-      "breakEvenVolume": 7051
+      "paybackMonths": "8.5"
     },
     "preset:premium": {
       "layer1CostPerUnit": 0.006006,

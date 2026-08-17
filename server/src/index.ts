@@ -272,7 +272,8 @@ server.registerWidget(
     description:
       "Use this when you want the full interactive ROI dashboard for an AI/LLM implementation. " +
       "It can run directly from a preset such as 'support' and render KPI cards, break-even banner, ROI curve, and financial overview. " +
-      "Returns ROI percentage, payback period, break-even volume, cost breakdown, and net benefit. " +
+      "Returns ROI percentage, payback period, cost breakdown, net benefit, and — for every value method except Retention Uplift — a break-even volume. " +
+      "Under Retention Uplift value comes from the customers kept rather than from volume, so no volume threshold exists and the field is absent; report it as not applicable, not as unreachable or as zero. " +
       "You do not need to call 'load-preset' first unless you only want the raw preset values. " +
       "IMPORTANT: When presenting results, report ALL dollar amounts and percentages EXACTLY as returned in the summary. " +
       "Do NOT recalculate, round, or estimate any figures — especially do not compute annual from monthly yourself. " +
@@ -314,13 +315,24 @@ server.registerWidget(
           ? fullInputs.baselineHumanCostPerUnit * fullInputs.monthlyVolume
           : undefined;
 
+      // breakEvenVolume is absent under Retention Uplift, where value comes from
+      // customers retained rather than from volume, so no volume threshold exists
+      // to cross. That is a different statement from "the margin never covers the
+      // fixed cost", and a bare "N/A" would let the reader hear the second one.
+      const breakEvenCell =
+        results.breakEvenVolume !== undefined
+          ? `${results.breakEvenVolume.toLocaleString()} ${pluralize(fullInputs.unitName)}/month`
+          : fullInputs.valueMethod === ValueMethod.RETENTION
+            ? "n/a — retention value is not volume-driven"
+            : "n/a — not reachable at any volume";
+
       const summary = [
         `${fullInputs.useCaseName} — ROI Summary`,
         `ROI: ${results.roiPercentage.toFixed(1)}%`,
         `Net Monthly Benefit: ${money(results.netMonthlyBenefit)}`,
         `Annualized Net Benefit: ${money(results.annualizedNetBenefit)}`,
         `Payback: ${results.paybackMonths} months`,
-        `Break-even Volume: ${results.breakEvenVolume !== undefined ? results.breakEvenVolume.toLocaleString() : "N/A"} ${pluralize(fullInputs.unitName)}/month`,
+        `Break-even Volume: ${breakEvenCell}`,
         `Monthly Cost: ${money(results.totalMonthlyCost)} | Monthly Value: ${money(results.totalMonthlyValue)}`,
       ].join(" | ");
 
@@ -350,7 +362,7 @@ server.registerWidget(
               `| Net Monthly Benefit | ${money(results.netMonthlyBenefit)} |`,
               `| Annualized Net Benefit | ${money(results.annualizedNetBenefit)} |`,
               `| Payback Period | ${results.paybackMonths} months |`,
-              `| Break-even Volume | ${results.breakEvenVolume !== undefined ? results.breakEvenVolume.toLocaleString() : "N/A"} ${pluralize(fullInputs.unitName)}/month |`,
+              `| Break-even Volume | ${breakEvenCell} |`,
               `| Monthly Cost | ${money(results.totalMonthlyCost)} |`,
               `| Monthly Value | ${money(results.totalMonthlyValue)} |`,
               baselineRow +

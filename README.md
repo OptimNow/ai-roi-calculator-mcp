@@ -60,7 +60,7 @@ Every figure it reports carries the price date it was computed from.
 
 | Tool | What it answers |
 |---|---|
-| **`calculate-roi-v4`** | "Is this worth doing?" Full ROI, payback, break-even volume, net benefit and cost breakdown. Renders an interactive dashboard in clients that support widgets. |
+| **`calculate-roi-v4`** | "Is this worth doing?" Full ROI, payback, net benefit, cost breakdown, and a break-even volume for every value method except Retention Uplift — there value follows the customers you keep, not the volume, so no threshold exists. Renders an interactive dashboard in clients that support widgets. |
 | **`lookup-model-price`** | "What does this model cost?" Live list, batch and prompt-cache prices for any model in the catalog, or the current top models. |
 | **`load-preset`** | "What are sensible defaults for this use case?" Returns 1 of 11 preset scenarios without computing anything. |
 | **`sensitivity-analysis`** | "What breaks this business case?" Impact ranking of volume, realization rate, cost and value at ±20%. |
