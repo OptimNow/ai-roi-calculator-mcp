@@ -4,15 +4,16 @@ name: CI
 # here by scripts/sync-engine.mjs. This job is what stops the two drifting apart
 # again: it re-runs the sync against the calculator's main branch and fails if
 # the result differs from what is committed.
+#
+# Drift the calculator introduced on its own is not this job's business — the
+# weekly sync-engine.yml catches that and opens a PR. Keeping it out of here is
+# the point: a red build should mean someone changed something, not that a
+# vendor repriced a model overnight.
 
 on:
   push:
     branches: [master]
   pull_request:
-  schedule:
-    # Catches drift introduced by a change on the calculator side, which would
-    # otherwise stay invisible here until someone happened to open a PR.
-    - cron: '0 7 * * 1'
   workflow_dispatch:
 
 jobs:

@@ -1,0 +1,114 @@
+name: Sync engine
+
+# The engine under server/src/lib/ is owned by the AI ROI Calculator, and the
+# calculator refreshes its embedded price snapshot every Monday. That lands here
+# as drift roughly every week, with nothing to decide: an upstream price moved,
+# the goldens move with it. This job does that mechanical work and opens a PR
+# with it, so the red build in ci.yml stays reserved for changes a human made
+# and should actually look at.
+#
+# It still goes red when the sync produces something the tests reject — that is
+# the case worth a human, and no PR is opened for it.
+
+on:
+  schedule:
+    - cron: '0 7 * * 1' # Mondays 07:00 UTC, an hour after the calculator's own refresh
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check out the calculator (engine source of truth)
+        uses: actions/checkout@v4
+        with:
+          repository: OptimNow/ai-roi-calculator
+          path: .calculator
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Sync the engine
+        run: node scripts/sync-engine.mjs --from .calculator
+
+      - name: Regenerate the goldens
+        run: node scripts/generate-goldens.mjs
+
+      # .calculator/ sits inside the checkout, so every git command below is
+      # scoped to server/src/lib to keep it out of the diff and the commit.
+      - name: Did anything move?
+        id: changes
+        run: |
+          if git diff --quiet -- server/src/lib; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Engine already in sync — nothing to do."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git diff --stat -- server/src/lib
+          fi
+
+      - name: Types
+        if: steps.changes.outputs.changed == 'true'
+        run: npx tsc --noEmit -p tsconfig.json
+
+      - name: Tests
+        if: steps.changes.outputs.changed == 'true'
+        run: npm test
+
+      - name: Open or update the pull request
+        if: steps.changes.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          BRANCH=chore/engine-sync
+          CALC_SHA=$(git -C .calculator rev-parse --short HEAD)
+          CALC_SUBJECT=$(git -C .calculator log -1 --pretty=%s)
+
+          {
+            echo "Opened by the weekly \`Sync engine\` job: the calculator's engine moved, and this is the mechanical copy plus the goldens that follow from it."
+            echo
+            echo "**Calculator at** [\`$CALC_SHA\`](https://github.com/OptimNow/ai-roi-calculator/commit/$CALC_SHA) — $CALC_SUBJECT"
+            echo
+            echo '```'
+            git diff --stat -- server/src/lib
+            echo '```'
+            echo
+            echo "**Recorded figures**"
+            echo
+            echo '```diff'
+            git diff -- server/src/lib/golden-scenarios.json | tail -n +5 | head -100
+            echo '```'
+            echo
+            echo "\`tsc --noEmit\` and \`npm test\` passed on this branch before it was opened, so the goldens above are the regenerated ones."
+            echo
+            echo "If the file list shows \`calculations.ts\` or \`constants.ts\`, the numbers moved for a reason other than prices — read the golden diff before merging."
+          } > "$RUNNER_TEMP/pr-body.md"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add server/src/lib
+          git commit -m "chore: sync the engine from the calculator, and regenerate the goldens"
+          git push --force origin "$BRANCH"
+
+          # The branch is reused, so an already-open PR just gets the new body.
+          if [ "$(gh pr view "$BRANCH" --json state --jq .state 2>/dev/null)" = "OPEN" ]; then
+            gh pr edit "$BRANCH" --body-file "$RUNNER_TEMP/pr-body.md"
+            echo "Updated the open PR."
+          else
+            gh pr create \
+              --base "${{ github.event.repository.default_branch }}" \
+              --head "$BRANCH" \
+              --title "Sync the engine from the calculator, and regenerate the goldens" \
+              --body-file "$RUNNER_TEMP/pr-body.md"
+          fi
