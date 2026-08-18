@@ -9,6 +9,7 @@
 [![ChatGPT Apps](https://img.shields.io/badge/ChatGPT-Apps%20SDK-10A37F?logo=openai&logoColor=white)](https://platform.openai.com/docs/apps)
 [![Node](https://img.shields.io/badge/Node-24%2B-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
 [![Prices](https://img.shields.io/badge/prices-OptimToken-ACE849?labelColor=2C2C2C)](https://optimtoken.optimnow.io)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![GitHub Stars](https://img.shields.io/github/stars/OptimNow/ai-roi-calculator-mcp?style=flat)](https://github.com/OptimNow/ai-roi-calculator-mcp/stargazers)
 
 ---
@@ -141,6 +142,18 @@ Built with [Skybridge](https://docs.skybridge.tech/), deployed on [Alpic](https:
 | [**OptimToken**](https://optimtoken.optimnow.io) | Compare what 250+ models cost per request, with caching and batch factored in. |
 | [**cloud-finops-skills**](https://github.com/OptimNow/cloud-finops-skills) | FinOps knowledge for AI agents: AWS, Azure, GCP, AI inference, SaaS. |
 | [**finops-mcp-resources**](https://github.com/OptimNow/finops-mcp-resources) | MCP servers, tutorials and client guides for cloud cost work. |
+
+---
+
+## License
+
+Released under the [MIT License](./LICENSE).
+
+The calculation engine in `server/src/lib/` is generated from the
+[AI ROI Calculator](https://github.com/OptimNow/ai-roi-calculator), which is MIT licensed
+as well. Prices come from third-party sources and are provided as is, without warranty.
+ROI figures are only as good as the assumptions you feed them: treat the output as a
+business case to challenge, not a forecast to bank on.
 
 ---
 
