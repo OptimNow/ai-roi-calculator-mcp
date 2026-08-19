@@ -1,0 +1,39 @@
+# Dependabot PRs are lockfile-only bumps of (mostly transitive) dependencies, and the
+# ruleset on master requires one approving review that the repo owner cannot give to
+# their own account's PRs at scale. This workflow gives that approval for dependabot's
+# patch and minor bumps and queues an auto-merge, so they land on their own once checks
+# pass. Major bumps are deliberately skipped: those need a human (see the Vite 8 note in
+# CLAUDE.md — skybridge < 1.x cannot take Vite 8, and majors in general deserve eyes).
+#
+# Two repository settings must stay enabled for this to work:
+#   - General → Allow auto-merge
+#   - Actions → General → Workflow permissions → "Allow GitHub Actions to create and
+#     approve pull requests"
+name: Dependabot auto-merge
+
+on: pull_request
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  automerge:
+    runs-on: ubuntu-latest
+    if: github.actor == 'dependabot[bot]' && github.repository == 'OptimNow/ai-roi-calculator-mcp'
+    steps:
+      - name: Fetch dependabot metadata
+        id: meta
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Approve and queue auto-merge (patch/minor only)
+        if: steps.meta.outputs.update-type != 'version-update:semver-major'
+        run: |
+          gh pr review "$PR_URL" --approve --body "Auto-approved dependabot ${UPDATE_TYPE#version-update:semver-} bump. Majors still wait for a human."
+          gh pr merge "$PR_URL" --squash --auto
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          UPDATE_TYPE: ${{ steps.meta.outputs.update-type }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
