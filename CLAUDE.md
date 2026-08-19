@@ -2,7 +2,7 @@
 
 **Project:** AI ROI Calculator MCP
 **Framework:** Skybridge (MCP App Framework)
-**Repo:** github.com/OptimNow/ai-roi-calculator-mcp — **still private** as of August 15, 2026
+**Repo:** github.com/OptimNow/ai-roi-calculator-mcp — public, MIT licensed
 **Deployed:** https://ai-roi-calculator-mc-e9dd36e7.alpic.live
 
 ---
@@ -12,11 +12,6 @@
 An MCP (Model Context Protocol) app that exposes AI ROI calculation tools as interactive widgets inside AI conversations (Claude, ChatGPT, VS Code, Goose). Built with Skybridge framework.
 
 **Origin:** Business logic copied from the standalone web app [ai-roi-calculator](https://github.com/OptimNow/ai-roi-calculator). The original app remains untouched.
-
-> **README.md is written for a public audience but the repo is private.** Until someone flips
-> visibility, the CI and stars badges render broken for anyone who is not a collaborator, and
-> the calculator's README deliberately does not link here. Either publish the repo or trim the
-> README — do not leave the two describing different worlds.
 
 ---
 
@@ -52,14 +47,16 @@ ai-roi-calculator-mcp/
 ├── scripts/
 │   ├── sync-engine.mjs           # Copies the engine from the calculator (--check for CI)
 │   └── generate-goldens.mjs      # Regenerates golden-scenarios.json
-├── .github/workflows/ci.yml      # Drift check + types + tests, per PR and weekly
+├── .github/workflows/
+│   ├── ci.yml                    # Drift check + types + tests, per PR and push to master
+│   └── sync-engine.yml           # Weekly (Mon 07:00 UTC): syncs, regenerates goldens, opens a PR
 ├── alpic.json                    # Alpic deployment config
 ├── tsconfig.json                 # Excludes *.test.ts from the server build
 └── vite.config.ts                # Skybridge Vite plugin
 ```
 
 Tests live beside the code: `server/src/lib/engine.test.ts`, `server/src/catalog.test.ts` and
-`server/src/formatting.test.ts`. `npm test` runs 35 of them across those 3 files. Several are
+`server/src/formatting.test.ts`. `npm test` runs 41 of them across those 3 files. Several are
 regression guards rather than unit tests: they fail if a hand-built `$` prefix or a naive
 `unitName + "s"` reappears, or if the registered widget list stops matching what has source.
 
@@ -132,8 +129,11 @@ node scripts/generate-goldens.mjs
 `golden-scenarios.json` records the figures every preset must keep producing. It is a
 change detector, not a proof of correctness: when it fails, the diff is the blast radius.
 
-CI runs `npm run sync:engine:check` against the calculator's main branch on every PR and
-weekly, so drift introduced from either side surfaces on its own.
+Two workflows keep the copies honest. `ci.yml` runs the sync check against the calculator's
+main branch on every PR and push to master, so a red build means a human changed something.
+`sync-engine.yml` runs every Monday: it syncs, regenerates the goldens, and opens (or updates)
+a `chore/engine-sync` PR when the calculator moved on its own — typically the weekly price
+snapshot refresh — so routine upstream drift never turns CI red.
 
 ## Model prices
 
