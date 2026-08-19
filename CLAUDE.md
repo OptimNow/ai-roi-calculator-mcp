@@ -49,6 +49,7 @@ ai-roi-calculator-mcp/
 │   └── generate-goldens.mjs      # Regenerates golden-scenarios.json
 ├── .github/workflows/
 │   ├── ci.yml                    # Drift check + types + tests, per PR and push to master
+│   ├── dependabot-automerge.yml  # Approves + auto-merges dependabot patch/minor; majors wait for a human
 │   └── sync-engine.yml           # Weekly (Mon 07:00 UTC): syncs, regenerates goldens, opens a PR
 ├── alpic.json                    # Alpic deployment config
 ├── tsconfig.json                 # Excludes *.test.ts from the server build
