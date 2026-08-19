@@ -63,6 +63,22 @@ describe('optional metrics in tool output', () => {
   });
 });
 
+describe('load-preset stays data-only', () => {
+  it('carries no widget metadata and computes nothing', () => {
+    // load-preset once carried openai/outputTemplate + ui.resourceUri and ran
+    // calculateROI, so "show me the assumptions without computing" was
+    // impossible and the tool contradicted its own description. It returns
+    // raw preset inputs; calculate-roi-v4 is the only renderer.
+    const block = indexSource.slice(
+      indexSource.indexOf('"load-preset"'),
+      indexSource.indexOf('"sensitivity-analysis"'),
+    );
+
+    expect(block).not.toMatch(/outputTemplate|resourceUri/);
+    expect(block).not.toMatch(/calculateROI\(/);
+  });
+});
+
 describe('widget registrations', () => {
   it('registers exactly the widgets that still have source', () => {
     // Three superseded calculate-roi versions were still being compiled into

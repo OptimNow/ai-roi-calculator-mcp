@@ -124,13 +124,25 @@ const useCaseInputSchema = z.object({
       "exist, and halve the cache-read price accordingly.",
     ),
 
-  orchestrationCostPerUnit: z.number().min(0).optional(),
-  retrievalCostPerUnit: z.number().min(0).optional(),
-  toolApiCostPerUnit: z.number().min(0).optional(),
-  loggingMonitoringCostPerUnit: z.number().min(0).optional(),
-  safetyGuardrailsCostPerUnit: z.number().min(0).optional(),
-  networkEgressCostPerUnit: z.number().min(0).optional(),
-  storageCostPerUnit: z.number().min(0).optional(),
+  // Harness costs are USD per SINGLE unit, but vendors quote them per 1,000
+  // calls (and the web calculator's UI accepts them that way, dividing on
+  // entry). The MCP schema has no such toggle, so each description carries
+  // the divide-by-1,000 warning — without it a relayed vendor quote lands
+  // 1,000x too high, silently.
+  orchestrationCostPerUnit: z.number().min(0).optional()
+    .describe("Orchestration cost in USD per SINGLE unit, not per 1,000. Vendors quote per 1,000 calls — divide by 1,000 before passing (e.g. $4/1k → 0.004)."),
+  retrievalCostPerUnit: z.number().min(0).optional()
+    .describe("Retrieval / vector search cost in USD per SINGLE unit, not per 1,000. Vendors quote per 1,000 queries — divide by 1,000 before passing (e.g. $3/1k → 0.003)."),
+  toolApiCostPerUnit: z.number().min(0).optional()
+    .describe("Third-party tool/API cost in USD per SINGLE unit, not per 1,000. Vendors quote per 1,000 calls — divide by 1,000 before passing."),
+  loggingMonitoringCostPerUnit: z.number().min(0).optional()
+    .describe("Logging/monitoring cost in USD per SINGLE unit, not per 1,000. Vendors quote per 1,000 calls — divide by 1,000 before passing."),
+  safetyGuardrailsCostPerUnit: z.number().min(0).optional()
+    .describe("Safety/guardrails cost in USD per SINGLE unit, not per 1,000. Vendors quote per 1,000 calls — divide by 1,000 before passing."),
+  networkEgressCostPerUnit: z.number().min(0).optional()
+    .describe("Network egress cost in USD per SINGLE unit, not per 1,000. Vendors quote per 1,000 calls — divide by 1,000 before passing."),
+  storageCostPerUnit: z.number().min(0).optional()
+    .describe("Storage cost in USD per SINGLE unit, not per 1,000. Vendors quote per 1,000 calls — divide by 1,000 before passing."),
   retryRate: z.number().min(0).max(1).optional(),
   overheadMultiplier: z.number().min(1).optional(),
 
@@ -236,7 +248,7 @@ const widgetUiMeta = {
 };
 
 const server = new McpServer(
-  { name: "ai-roi-calculator", version: "1.3.0" },
+  { name: "ai-roi-calculator", version: "1.4.0" },
   { capabilities: {} },
 );
 
@@ -245,9 +257,6 @@ const readOnlyAnnotations = {
   openWorldHint: false,
   destructiveHint: false,
 };
-const appsSdkWidgetUri = "ui://widgets/apps-sdk/calculate-roi-v4.html";
-const mcpAppWidgetUri = "ui://widgets/ext-apps/calculate-roi-v4.html";
-
 const openAiAppsChallengeHandler = (_req: unknown, res: TextResponse) => {
   if (!openAiAppsChallenge) {
     res.status(404).type("text/plain").send("OPENAI_APPS_CHALLENGE is not configured.");
@@ -513,7 +522,8 @@ server.registerTool(
       "callSummary (Call Summary), agentWorkflow (Agent Workflow), " +
       "recommendation (E-commerce Recommendations), retention (Customer Retention AI), " +
       "premium (AI Premium Features). " +
-      "Returns the preset inputs together with the standard ROI dashboard payload.",
+      "Returns the preset's default assumptions only — nothing is computed and no dashboard is rendered. " +
+      "To compute ROI and render the interactive dashboard, call calculate-roi-v4 (it accepts the preset directly).",
     inputSchema: {
       preset: z
         .enum(ALL_PRESETS)
@@ -523,8 +533,6 @@ server.registerTool(
     _meta: {
       "openai/toolInvocation/invoking": "Loading preset",
       "openai/toolInvocation/invoked": "Preset loaded",
-      "openai/outputTemplate": appsSdkWidgetUri,
-      ui: { resourceUri: mcpAppWidgetUri },
     },
   },
   async ({ preset }) => {
@@ -537,10 +545,9 @@ server.registerTool(
     }
 
     const fullInputs = buildFullInputs({ preset });
-    const results = calculateROI(fullInputs);
 
     return {
-      structuredContent: { inputs: fullInputs, results },
+      structuredContent: { inputs: fullInputs },
       content: [
         {
           type: "text",
@@ -556,7 +563,7 @@ server.registerTool(
             `| Primary Model Input Tokens | ${fullInputs.primaryModel.avgInputTokensPerUnit} |`,
             `| Primary Model Output Tokens | ${fullInputs.primaryModel.avgOutputTokensPerUnit} |`,
             "",
-            "Preset loaded and dashboard rendered with default values.",
+            "Preset assumptions loaded — no ROI computed. Call calculate-roi-v4 with this preset to compute and render the dashboard.",
           ].join("\n"),
         },
       ],
