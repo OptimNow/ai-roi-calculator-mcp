@@ -52,7 +52,7 @@ ai-roi-calculator-mcp/
 │   └── sync-engine.yml           # Weekly (Mon 07:00 UTC): syncs, regenerates goldens, opens a PR
 ├── alpic.json                    # Alpic deployment config
 ├── tsconfig.json                 # Excludes *.test.ts from the server build
-└── vite.config.ts                # Skybridge Vite plugin
+└── vitest.config.ts              # Test runner config; resolves the engine's ./x.js specifiers to .ts
 ```
 
 Tests live beside the code: `server/src/lib/engine.test.ts`, `server/src/catalog.test.ts` and
@@ -183,7 +183,7 @@ Desktop's ~6s `initialize` timeout on every conversation. Both fail quietly, whi
 ## Key Design Decisions
 
 1. **Skybridge `registerWidget()`** for tools with UI, `tool()` for data-only tools
-2. **`structuredContent`** returns full data for widget rendering (ChatGPT renders HTML; Claude Desktop shows text fallback)
+2. **`structuredContent`** returns full data for widget rendering — ChatGPT and claude.ai/Desktop both render the widget (Desktop rendering requires skybridge >= 0.35.21, see Dependencies)
 3. **`content`** returns markdown text for LLM-native display
 4. **Zod schemas** validate all tool inputs with defaults matching the original app presets
 5. **Pure calculation functions** from original app used without modification
@@ -194,7 +194,7 @@ Desktop's ~6s `initialize` timeout on every conversation. Both fail quietly, whi
 
 - No API keys needed — all calculations run server-side
 - No database — stateless tool execution
-- Business logic in `server/src/lib/` is generated — see "Engine sync" below
+- Business logic in `server/src/lib/` is generated — see "Engine sync" above
 - Brand color: Chartreuse (#ACE849) for OptimNow identity
 - Widget UIs consume `useToolInfo()` hook from Skybridge (not React props)
 
@@ -216,4 +216,7 @@ Requires **Node.js >= 24.14.0** (`engines` in package.json).
 - `vite` — Build tooling
 
 Dev only: `alpic` (deployment CLI), `@skybridge/devtools`, `vitest` (test runner),
-`esbuild` (bundles the engine for `generate-goldens.mjs`), `tsx`, `typescript`.
+`esbuild` (bundles the engine for `generate-goldens.mjs`), `tsx`, `typescript`, and
+`@types/node` — a direct devDependency on purpose: the extended `skybridge/tsconfig` declares
+`"types": ["node"]`, and skybridge stopped shipping `@types/node` transitively at 0.35.x, so
+removing it breaks the typecheck.
