@@ -57,9 +57,11 @@ ai-roi-calculator-mcp/
 ```
 
 Tests live beside the code: `server/src/lib/engine.test.ts`, `server/src/catalog.test.ts` and
-`server/src/formatting.test.ts`. `npm test` runs 41 of them across those 3 files. Several are
+`server/src/formatting.test.ts`. `npm test` runs 42 of them across those 3 files. Several are
 regression guards rather than unit tests: they fail if a hand-built `$` prefix or a naive
-`unitName + "s"` reappears, or if the registered widget list stops matching what has source.
+`unitName + "s"` reappears, if the registered widget list stops matching what has source, or
+if `load-preset` regains widget metadata or a `calculateROI` call (it rendered the dashboard
+until 1.4.0, contradicting its own description).
 
 ---
 
@@ -77,6 +79,11 @@ registering them. If a folder is not registered in `index.ts`, delete it.
 | `sensitivity-analysis` | `registerTool` | Impact ranking at ±20%. No widget, despite the name matching a folder that used to exist. |
 
 All four are read-only (`readOnlyHint`) and take no credentials.
+
+Harness cost overrides (`orchestrationCostPerUnit` and the six siblings) are USD **per single
+unit**. Vendors quote per 1,000 calls and the web calculator's UI divides on entry, but the
+MCP schema has no such toggle — the field descriptions carry the divide-by-1,000 warning so
+a relayed vendor quote does not land 1,000x too high.
 
 **Presets:** support, knowledgeQA, meetingSummary, marketingContent, codingTask, invoice,
 callSummary, agentWorkflow, recommendation, retention, premium.
@@ -183,7 +190,7 @@ Desktop's ~6s `initialize` timeout on every conversation. Both fail quietly, whi
 
 ## Key Design Decisions
 
-1. **Skybridge `registerWidget()`** for tools with UI, `tool()` for data-only tools
+1. **Skybridge `registerWidget()`** for tools with UI, `registerTool()` for data-only tools
 2. **`structuredContent`** returns full data for widget rendering — ChatGPT and claude.ai/Desktop both render the widget (Desktop rendering requires skybridge >= 0.35.21, see Dependencies)
 3. **`content`** returns markdown text for LLM-native display
 4. **Zod schemas** validate all tool inputs with defaults matching the original app presets
@@ -209,8 +216,8 @@ Requires **Node.js >= 24.14.0** (`engines` in package.json).
   `_meta.ui.domain` is hashed from Alpic's internal path instead of the public connector URL
   (read from the `x-alpic-forwarded-url` header), so claude.ai/Desktop rejects every widget
   with "ui.domain validation failed". At 0.36.0 the `mountWidget` API the widget entry point
-  depends on is removed. Vite major bumps (8.x) are likewise incompatible with skybridge < 1.x
-  — close those dependabot PRs with `@dependabot ignore this major version`; 7.x bumps are fine.
+  depends on is removed. Vite 8.x is in use since PR #28 and builds green on skybridge
+  0.35.21 — the earlier "close vite 8 dependabot PRs" guidance no longer applies.
 - `@modelcontextprotocol/sdk` — MCP protocol SDK
 - `zod` — Input schema validation
 - `react`, `react-dom` — Widget UI rendering
