@@ -167,15 +167,16 @@ Deploys to Alpic Cloud. `npm run deploy` wraps the same command.
 user-facing, because that is what README.md and the connector instructions give people. A GET
 on `/mcp` returns 405, which is correct rather than broken: the transport is POST-only.
 
-### Connecting to Claude Desktop
+### Connecting to Claude Desktop / claude.ai
 
-Add to `claude_desktop_config.json`:
-```json
-"ai-roi-calculator": {
-  "command": "cmd",
-  "args": ["/c", "npx", "mcp-remote", "https://ai-roi-calculator-mc-e9dd36e7.alpic.live/mcp"]
-}
-```
+**Settings → Connectors → Add custom connector**, paste
+`https://ai-roi-calculator-mc-e9dd36e7.alpic.live/mcp`. That is the only supported route — same
+as README.md.
+
+Do **not** document `claude_desktop_config.json` for this server: Desktop silently drops
+`"type": "http"` entries from that file, and wrapping the URL in `npx mcp-remote` blows past
+Desktop's ~6s `initialize` timeout on every conversation. Both fail quietly, which reads as
+"the server is broken" when it isn't.
 
 ---
 
@@ -203,7 +204,12 @@ Add to `claude_desktop_config.json`:
 
 Requires **Node.js >= 24.14.0** (`engines` in package.json).
 
-- `skybridge` — MCP app framework
+- `skybridge` — MCP app framework. **Pinned `^0.35.21`, do not cross 0.36.** Below 0.35.21,
+  `_meta.ui.domain` is hashed from Alpic's internal path instead of the public connector URL
+  (read from the `x-alpic-forwarded-url` header), so claude.ai/Desktop rejects every widget
+  with "ui.domain validation failed". At 0.36.0 the `mountWidget` API the widget entry point
+  depends on is removed. Vite major bumps (8.x) are likewise incompatible with skybridge < 1.x
+  — close those dependabot PRs with `@dependabot ignore this major version`; 7.x bumps are fine.
 - `@modelcontextprotocol/sdk` — MCP protocol SDK
 - `zod` — Input schema validation
 - `react`, `react-dom` — Widget UI rendering
