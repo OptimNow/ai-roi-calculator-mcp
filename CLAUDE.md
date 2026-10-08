@@ -50,7 +50,7 @@ ai-roi-calculator-mcp/
 │   ├── generate-goldens.mjs      # Regenerates golden-scenarios.json
 │   └── check-connector.mjs       # Manual: call a deployed connector and check tools, ui.domain, price source
 ├── .github/workflows/
-│   ├── ci.yml                    # Drift check + types + tests, per PR and push to master
+│   ├── ci.yml                    # Drift check + types + tests, per PR and push to master; deploys master to Fly
 │   ├── dependabot-automerge.yml  # Approves + auto-merges dependabot patch/minor; majors wait for a human
 │   └── sync-engine.yml           # Weekly (Mon 07:00 UTC): syncs, regenerates goldens, opens a PR
 ├── Dockerfile                    # Two-stage Node 24 image: build, then `skybridge start`
@@ -181,8 +181,19 @@ operated the same way. `fly deploy` builds the `Dockerfile` on Fly's remote buil
 and rolls the app named in `fly.toml`; the `.dockerignore` keeps `node_modules`,
 `dist`, docs, scripts and tests out of the build context. `flyctl` is not an npm
 package: install it from <https://fly.io/docs/flyctl/install/> and `fly auth login`
-once. Nothing deploys on its own: a merge to `master` changes nothing until someone
-runs this (the pricing hub has a CI deploy job for that; this repo does not yet).
+once.
+
+**Releases deploy themselves.** The `deploy` job in `ci.yml` runs
+`flyctl deploy --remote-only` on every push to `master`, after the `test` job has
+passed, then asks the live server (on the fly.dev host, so the check does not depend
+on DNS) for its `serverInfo.version` and fails unless it matches the `version` in
+`server/src/index.ts`. It needs the `FLY_API_TOKEN` repository secret
+(`fly tokens create deploy --app ai-roi-calculator-mcp`). Dependabot merges do not
+trigger it: auto-merge is queued with `GITHUB_TOKEN`, and GitHub starts no workflow
+from a push made with that token; those bumps ship with the next human merge, or at
+once from Actions -> CI -> Run workflow on `master`. The first deploy is manual, since
+the Fly app must exist before the job can roll it: `fly apps create ai-roi-calculator-mcp`,
+then `fly deploy` from a checkout of the merged commit.
 
 The public URL is **one constant**, `PUBLIC_MCP_URL` in `server/src/public-url.ts`:
 `https://airoicalculator-mcp.optimnow.io/mcp`. `public-url.test.ts` fails if any published
