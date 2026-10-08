@@ -43,3 +43,55 @@ jobs:
 
       - name: Tests
         run: npm test
+
+  # Deploys master to Fly.io once `test` has passed, so a merge that breaks the
+  # drift check, the typecheck or the tests never reaches the live connector.
+  # Same job as the pricing hub's ci.yml. Needs the FLY_API_TOKEN repository
+  # secret, an app-scoped deploy token:
+  #   fly tokens create deploy --app ai-roi-calculator-mcp
+  #
+  # Dependabot merges do not deploy on their own: auto-merge is queued with
+  # GITHUB_TOKEN, and GitHub does not start workflows from pushes made with
+  # that token. They ship with the next human merge, or straight away from
+  # Actions -> CI -> Run workflow on master.
+  deploy:
+    needs: test
+    if: >-
+      github.repository == 'OptimNow/ai-roi-calculator-mcp' &&
+      github.ref == 'refs/heads/master' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    # One deploy at a time, and never cancel one halfway through a rollout.
+    concurrency:
+      group: fly-deploy
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1 # 1.6
+
+      # Builds the Dockerfile on Fly's remote builder and rolls the machine.
+      - run: flyctl deploy --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      # A deploy that exits 0 has not necessarily put this commit live. Ask the
+      # server which version it runs and compare it with the one this commit
+      # declares, on the fly.dev host so the check does not depend on DNS. The
+      # first call can also pay a machine start (scale-to-zero), hence the
+      # retries.
+      - name: Check the live server runs this commit's version
+        run: |
+          expected=$(grep -oP 'name: "ai-roi-calculator", version: "\K[^"]+' server/src/index.ts)
+          for attempt in 1 2 3 4 5 6; do
+            actual=$(curl -sS -m 30 -X POST https://ai-roi-calculator-mcp.fly.dev/mcp \
+              -H 'Content-Type: application/json' \
+              -H 'Accept: application/json, text/event-stream' \
+              -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"deploy-check","version":"0"}}}' \
+              | grep -oP '"serverInfo":\{"name":"[^"]*","version":"\K[^"]+' || true)
+            echo "attempt $attempt: live=${actual:-none} expected=$expected"
+            [ "$actual" = "$expected" ] && exit 0
+            sleep 10
+          done
+          echo "::error::Live server reports '${actual:-no answer}', expected '$expected'"
+          exit 1
