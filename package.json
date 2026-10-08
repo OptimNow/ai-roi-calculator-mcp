@@ -1,6 +1,6 @@
 {
   "name": "ai-roi-calculator-mcp",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "private": true,
   "description": "MCP server for the AI ROI Calculator (OptimNow)",
   "type": "module",
@@ -8,7 +8,7 @@
     "dev": "skybridge dev",
     "build": "skybridge build",
     "start": "skybridge start",
-    "deploy": "alpic deploy",
+    "deploy": "fly deploy",
     "sync:engine": "node scripts/sync-engine.mjs",
     "sync:engine:check": "node scripts/sync-engine.mjs --check",
     "test": "vitest run"
@@ -27,7 +27,6 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.2.0",
-    "alpic": "^1.91.6",
     "esbuild": "^0.28.2",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",

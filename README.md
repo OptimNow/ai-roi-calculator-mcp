@@ -19,12 +19,15 @@
 The server is hosted, so there is nothing to install.
 
 ```
-https://ai-roi-calculator-mc-e9dd36e7.alpic.live/mcp
+https://airoicalculator-mcp.optimnow.io/mcp
 ```
+
+Paste it exactly as written, with `/mcp` and no trailing slash. The widget
+renders only for that form: the host checks a hash of the URL you entered.
 
 | Client | How to add it |
 |---|---|
-| <img src="https://img.shields.io/badge/-Claude%20Code-D97757?logo=anthropic&logoColor=white" alt="Claude Code" height="22"/> | `claude mcp add --transport http ai-roi-calculator https://ai-roi-calculator-mc-e9dd36e7.alpic.live/mcp` |
+| <img src="https://img.shields.io/badge/-Claude%20Code-D97757?logo=anthropic&logoColor=white" alt="Claude Code" height="22"/> | `claude mcp add --transport http ai-roi-calculator https://airoicalculator-mcp.optimnow.io/mcp` |
 | <img src="https://img.shields.io/badge/-Claude.ai%20%2F%20Desktop-D97757?logo=anthropic&logoColor=white" alt="Claude.ai / Desktop" height="22"/> | **Settings → Connectors → Add custom connector**, paste the URL above |
 | <img src="https://img.shields.io/badge/-ChatGPT-10A37F?logo=openai&logoColor=white" alt="ChatGPT" height="22"/> | **Settings → Connectors → Add**, paste the URL. The ROI dashboard renders as an interactive widget |
 | <img src="https://img.shields.io/badge/-Cursor-000000?logo=cursor&logoColor=white" alt="Cursor" height="22"/> <img src="https://img.shields.io/badge/-Windsurf-3DDC91?logoColor=white" alt="Windsurf" height="22"/> <img src="https://img.shields.io/badge/-VS%20Code-007ACC?logo=visualstudiocode&logoColor=white" alt="VS Code" height="22"/> | Add an HTTP MCP server entry pointing at the URL |
@@ -130,7 +133,8 @@ ai-roi-calculator-mcp/
 └─ web/src/widgets/calculate-roi-v4/
 ```
 
-Built with [Skybridge](https://docs.skybridge.tech/), deployed on [Alpic](https://alpic.ai/).
+Built with [Skybridge](https://docs.skybridge.tech/), hosted on [Fly.io](https://fly.io/)
+(`Dockerfile` and `fly.toml` at the repository root, region Paris, scale-to-zero).
 
 ---
 

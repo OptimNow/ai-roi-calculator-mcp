@@ -7,6 +7,7 @@ import { ValueMethod } from "./lib/types.js";
 import { findModel, getCatalog, provenance } from "./catalog.js";
 import { formatUsd, pluralize } from "./lib/format.js";
 import { calculatorUrl } from "./deeplink.js";
+import { pinPublicUrl } from "./public-url.js";
 
 declare const process: {
   env: Record<string, string | undefined>;
@@ -248,7 +249,7 @@ const widgetUiMeta = {
 };
 
 const server = new McpServer(
-  { name: "ai-roi-calculator", version: "1.4.0" },
+  { name: "ai-roi-calculator", version: "1.5.0" },
   { capabilities: {} },
 );
 
@@ -267,6 +268,14 @@ const openAiAppsChallengeHandler = (_req: unknown, res: TextResponse) => {
 };
 
 server.use("/.well-known/openai-apps-challenge", openAiAppsChallengeHandler);
+
+// Every MCP request is hashed as if it arrived at PUBLIC_MCP_URL, so the
+// claude.ai widget sandbox domain follows the one published URL rather than
+// the Host header. Skybridge mounts custom middleware ahead of the MCP
+// transport; see public-url.ts for why the header, and public-url.test.ts for
+// the pin. PUBLIC_APP_ORIGIN above still drives the CSP lists and the
+// ChatGPT-side widget domain; fly.toml sets it to the same origin.
+server.use("/mcp", pinPublicUrl);
 
 // ─── Tool 1: Calculate ROI (widget) ────────────────────────────────────────
 
