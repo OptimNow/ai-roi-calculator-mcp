@@ -216,9 +216,10 @@ path. Alpic's ingress injected that header; Fly's proxy does not, so `pinPublicU
 in `public-url.ts` sets it on every request from `PUBLIC_MCP_URL`, writing both
 `req.headers` and `rawHeaders` (the MCP SDK rebuilds the request from the raw list
 through hono's Node adapter, so the parsed object alone never reaches Skybridge).
-The resulting hash is pinned by `public-url.test.ts`. Consequences: users paste the
-URL exactly, with `/mcp` and no trailing slash; the fly.dev host serves tool calls
-only. `PUBLIC_APP_ORIGIN` (set in `fly.toml`) still drives the widget CSP lists and
+The resulting hash is pinned by `public-url.test.ts`. **Rendering confirmed by hand on
+Claude Desktop on 2026-10-09** with the connector added under exactly that URL: the
+ROI dashboard widget drew its frame. Consequences: users paste the URL exactly, with
+`/mcp` and no trailing slash; the fly.dev host serves tool calls only. `PUBLIC_APP_ORIGIN` (set in `fly.toml`) still drives the widget CSP lists and
 the ChatGPT-side `openai/widgetDomain`; keep it equal to the URL's origin.
 
 **Verify by calling, not by reading.** After every deploy:
