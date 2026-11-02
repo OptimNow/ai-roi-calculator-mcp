@@ -19,7 +19,7 @@
     "react-dom": "^19.2.4",
     "skybridge": "^0.35.21",
     "vite": "^8.3.4",
-    "zod": "^4.3.6"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@skybridge/devtools": "^0.36.4",
