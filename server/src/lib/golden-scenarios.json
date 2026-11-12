@@ -110,14 +110,14 @@
       "breakEvenVolume": 62620
     },
     "preset:retention": {
-      "layer1CostPerUnit": 0.000861,
-      "layer2CostPerUnit": 0.011761,
-      "totalCostPerUnit": 0.303427,
+      "layer1CostPerUnit": 0.000632,
+      "layer2CostPerUnit": 0.011532,
+      "totalCostPerUnit": 0.303198,
       "grossValuePerUnit": 0.425,
       "totalMonthlyValue": 4250,
-      "totalMonthlyCost": 3034.273067,
-      "netMonthlyBenefit": 1215.726933,
-      "roiPercentage": 40.066497,
+      "totalMonthlyCost": 3031.983307,
+      "netMonthlyBenefit": 1218.016693,
+      "roiPercentage": 40.172276,
       "paybackMonths": "8.5"
     },
     "preset:premium": {
