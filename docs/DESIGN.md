@@ -40,7 +40,7 @@ ai-roi-calculator-mcp/
 ├── .github/workflows/
 │   ├── ci.yml                    # Drift check + types + tests, per PR and push to master; deploys master to Fly
 │   ├── dependabot-automerge.yml  # Approves + auto-merges dependabot patch/minor; majors wait for a human
-│   └── sync-engine.yml           # Weekly (Mon 07:00 UTC): syncs, regenerates goldens, opens a PR
+│   └── sync-engine.yml           # Weekly (Mon 07:00 UTC): syncs, regenerates goldens, pushes a price-only sync to master with a deploy key, opens a PR for anything else
 ├── Dockerfile                    # Two-stage Node 24 image: build, then `skybridge start`
 ├── .dockerignore                 # Keeps node_modules, dist, docs, scripts and tests out of the build context
 ├── fly.toml                      # Fly.io app config: cdg, scale-to-zero, 512 MB, PUBLIC_APP_ORIGIN
@@ -93,6 +93,37 @@ from a push made with that token; those bumps ship with the next human merge, or
 once from Actions -> CI -> Run workflow on `master`. The first deploy is manual, since
 the Fly app must exist before the job can roll it: `fly apps create ai-roi-calculator-mcp`,
 then `fly deploy` from a checkout of the merged commit.
+
+**The weekly sync lands by itself when only prices moved.** `sync-engine.yml` copies the
+calculator's engine every Monday at 07:00 UTC, regenerates the goldens and runs `tsc` and
+`npm test` on the result. If the only files that moved are `modelCatalog.ts` and
+`golden-scenarios.json`, it pushes the commit to `master` with a deploy key (the
+`MAIN_PUSH_DEPLOY_KEY` secret). A push made with a deploy key starts workflows, unlike one
+made with `GITHUB_TOKEN`, so `ci.yml` runs on it and deploys. If anything else moved, or the
+push is refused, or there is no key, the job opens a `chore/engine-sync` pull request
+assigned to the maintainer, starts `ci.yml` on that branch so the required `test` check
+appears, and fails: a green run means "nothing to sync" or "on master". The ruleset on
+`master` asks for a pull request, one approving review and the `test` check, none of which
+a job can supply for its own pull request, so the push needs "Deploy keys" in the ruleset's
+bypass list. The workflow's header has the history (a pull request that sat open for 17 days
+in October and November 2026) and the reasoning.
+
+The order matters when a human does it instead: merge the calculator's snapshot first, then
+run this sync, then merge its pull request. A copy taken before the calculator moved fails
+the engine check on `master` and stops the deploy.
+
+One-time setup, in a POSIX shell (Git Bash on Windows), from an empty folder:
+
+```bash
+ssh-keygen -t ed25519 -N "" -C "main-push ai-roi-calculator-mcp" -f main-push-key
+gh repo deploy-key add main-push-key.pub --repo OptimNow/ai-roi-calculator-mcp --allow-write --title "main-push (sync-engine)"
+gh secret set MAIN_PUSH_DEPLOY_KEY --repo OptimNow/ai-roi-calculator-mcp < main-push-key
+rm main-push-key main-push-key.pub
+```
+
+Then, on GitHub: Settings -> Rules -> Rulesets -> `protect-default-branch` -> Bypass list ->
+Add bypass -> Deploy keys, mode Always. To withdraw the arrangement, delete the deploy key
+(Settings -> Deploy keys): the job goes back to the pull request and says so in red.
 
 The public URL is **one constant**, `PUBLIC_MCP_URL` in `server/src/public-url.ts`:
 `https://airoicalculator-mcp.optimnow.io/mcp`. `public-url.test.ts` fails if any published

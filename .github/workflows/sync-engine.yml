@@ -3,12 +3,47 @@ name: Sync engine
 # The engine under server/src/lib/ is owned by the AI ROI Calculator, and the
 # calculator refreshes its embedded price snapshot every Monday. That lands here
 # as drift roughly every week, with nothing to decide: an upstream price moved,
-# the goldens move with it. This job does that mechanical work and opens a PR
-# with it, so the red build in ci.yml stays reserved for changes a human made
-# and should actually look at.
+# the goldens move with it. This job does that mechanical work, so the red build
+# in ci.yml stays reserved for changes a human made and should actually look at.
 #
-# It still goes red when the sync produces something the tests reject — that is
-# the case worth a human, and no PR is opened for it.
+# WHERE THE RESULT GOES, once `tsc` and `npm test` have passed on it here:
+#
+#   - Only prices moved (modelCatalog.ts and the goldens that follow from it):
+#     the job pushes the commit to master with a deploy key. That push starts
+#     ci.yml like any other, which checks the engine again, tests and deploys.
+#   - Anything else moved (calculations.ts, constants.ts, types.ts, format.ts):
+#     the numbers changed for a reason other than prices. The job opens a pull
+#     request, assigns it to the maintainer, starts ci.yml on it and FAILS. That
+#     one is for a human to read.
+#   - The push was refused, or there is no key: same pull request, same failure.
+#
+# A green run therefore means "nothing to sync" or "synced, on master".
+#
+# WHY A DEPLOY KEY. The ruleset on master asks for a pull request with one
+# approving review and for the `test` check. Until 12 Nov 2026 this job opened a
+# pull request and stopped there, green. A pull request opened with the job's
+# token gets no CI run (GitHub does not start workflows from it) and no job can
+# approve its own, so it could never become mergeable by itself: the one of 26
+# Oct sat open for 17 days. It was then merged by hand a minute after the
+# calculator had merged a newer snapshot, master failed its engine check, and
+# the deploy stopped until the sync was run again.
+#
+# A bypass for GitHub Actions is not offered on a repository owned by a personal
+# account, and would cover anything that later runs as the bot. A deploy key is
+# offered, and is narrower: it is handed to one step, for one push, after the
+# checks passed. The ruleset lists "Deploy keys" as a bypass actor, mode Always.
+# A push made with a deploy key starts workflows, which one made with the job's
+# token does not: that is what makes the deploy follow. Same route as
+# cloud-sparkle-compare's refresh jobs (31 Oct 2026) and as the calculator's
+# refresh-model-snapshot.yml.
+#
+# One-time setup (docs/DESIGN.md has the commands):
+#   - a deploy key with write access, its private half in the
+#     MAIN_PUSH_DEPLOY_KEY secret;
+#   - "Deploy keys" in the bypass list of the ruleset on master, mode Always.
+#
+# It still goes red when the sync produces something the tests reject. Nothing
+# is pushed and no pull request is opened for that.
 
 on:
   schedule:
@@ -18,6 +53,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  actions: write # starts ci.yml on the pull request branch, which no push from this job would
 
 jobs:
   sync:
@@ -49,12 +85,12 @@ jobs:
       - name: Did anything move?
         id: changes
         run: |
-          if git diff --quiet -- server/src/lib; then
+          if [ -z "$(git status --porcelain -- server/src/lib)" ]; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "Engine already in sync — nothing to do."
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
-            git diff --stat -- server/src/lib
+            git status --short -- server/src/lib
           fi
 
       - name: Types
@@ -65,17 +101,28 @@ jobs:
         if: steps.changes.outputs.changed == 'true'
         run: npm test
 
-      - name: Open or update the pull request
+      # The deploy key reaches this step and no other: the install, the sync
+      # and the tests above run third-party code and never see it.
+      - name: Land the sync on master, or hand it to a human
         if: steps.changes.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          DEPLOY_KEY: ${{ secrets.MAIN_PUSH_DEPLOY_KEY }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          BRANCH: chore/engine-sync
         run: |
-          BRANCH=chore/engine-sync
+          set -euo pipefail
           CALC_SHA=$(git -C .calculator rev-parse --short HEAD)
           CALC_SUBJECT=$(git -C .calculator log -1 --pretty=%s)
 
+          # Everything that moved, new files included. Prices alone are the two
+          # files below; any other path is the engine itself.
+          moved=$(git status --porcelain -- server/src/lib | awk '{print $NF}')
+          beyond_prices=$(printf '%s\n' "$moved" \
+            | grep -v -x -e server/src/lib/modelCatalog.ts -e server/src/lib/golden-scenarios.json || true)
+
           {
-            echo "Opened by the weekly \`Sync engine\` job: the calculator's engine moved, and this is the mechanical copy plus the goldens that follow from it."
+            echo "The calculator's engine moved, and this is the mechanical copy plus the goldens that follow from it."
             echo
             echo "**Calculator at** [\`$CALC_SHA\`](https://github.com/OptimNow/ai-roi-calculator/commit/$CALC_SHA) — $CALC_SUBJECT"
             echo
@@ -89,26 +136,83 @@ jobs:
             git diff -- server/src/lib/golden-scenarios.json | tail -n +5 | head -100
             echo '```'
             echo
-            echo "\`tsc --noEmit\` and \`npm test\` passed on this branch before it was opened, so the goldens above are the regenerated ones."
-            echo
-            echo "If the file list shows \`calculations.ts\` or \`constants.ts\`, the numbers moved for a reason other than prices — read the golden diff before merging."
-          } > "$RUNNER_TEMP/pr-body.md"
+            echo "\`tsc --noEmit\` and \`npm test\` passed on this tree in the job, so the goldens above are the regenerated ones."
+          } > "$RUNNER_TEMP/sync-summary.md"
+          cat "$RUNNER_TEMP/sync-summary.md" >> "$GITHUB_STEP_SUMMARY"
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout -b "$BRANCH"
           git add server/src/lib
-          git commit -m "chore: sync the engine from the calculator, and regenerate the goldens"
-          git push --force origin "$BRANCH"
+          git commit -m "chore: sync the engine from the calculator, and regenerate the goldens" \
+            -m "Calculator at $CALC_SHA: $CALC_SUBJECT"
 
-          # The branch is reused, so an already-open PR just gets the new body.
+          if [ -n "$beyond_prices" ]; then
+            why="the engine moved beyond its prices ($(printf '%s' "$beyond_prices" | tr '\n' ' ')), so the numbers changed for a reason a human should read"
+          elif [ -z "$DEPLOY_KEY" ]; then
+            why="the MAIN_PUSH_DEPLOY_KEY secret is not set"
+          else
+            key_file="$RUNNER_TEMP/main-push-deploy-key"
+            known_hosts="$RUNNER_TEMP/main-push-known-hosts"
+            trap 'rm -f "$key_file"' EXIT
+
+            # GitHub's host keys come from its API, never trusted on first use.
+            gh api meta --jq '.ssh_keys[] | "github.com " + .' > "$known_hosts"
+            if [ ! -s "$known_hosts" ]; then
+              echo "::error title=No GitHub host keys::Could not read GitHub's SSH host keys from the API, so the deploy key cannot be used safely. Re-run the workflow."
+              exit 1
+            fi
+
+            ( umask 077; printf '%s\n' "$DEPLOY_KEY" > "$key_file" )
+            if GIT_SSH_COMMAND="ssh -i $key_file -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$known_hosts" \
+                 git push "git@github.com:${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/$DEFAULT_BRANCH"; then
+              rm -f "$key_file"
+              echo "Sync pushed to $DEFAULT_BRANCH with the deploy key. ci.yml runs on that push: it tests and deploys."
+              # A pull request left over from a week the push was refused now
+              # holds an older copy than master: close it with its branch.
+              if [ "$(gh pr view "$BRANCH" --json state --jq .state 2>/dev/null)" = "OPEN" ]; then
+                gh pr close "$BRANCH" --delete-branch \
+                  --comment "Superseded: this week's sync was pushed to $DEFAULT_BRANCH by the job."
+              fi
+              exit 0
+            fi
+            rm -f "$key_file"
+            why="the push with the deploy key was refused (the lines above say why: no write access, \"Deploy keys\" missing from the ruleset's bypass list, or $DEFAULT_BRANCH moved during the run)"
+          fi
+
+          # A pull request, for a human. The branch is reused, so this replaces
+          # whatever the previous run left there. Only ever force-pushes this
+          # bot branch.
+          git push --force origin "HEAD:refs/heads/$BRANCH"
+
+          {
+            echo "Opened by the weekly \`Sync engine\` job instead of a push to \`$DEFAULT_BRANCH\`: $why."
+            echo
+            cat "$RUNNER_TEMP/sync-summary.md"
+            echo
+            echo "If the file list shows \`calculations.ts\` or \`constants.ts\`, the numbers moved for a reason other than prices — read the golden diff before merging."
+            echo
+            echo "The job started \`ci.yml\` on this branch, so the \`test\` check the ruleset asks for appears below. The approving review is yours."
+          } > "$RUNNER_TEMP/pr-body.md"
+
           if [ "$(gh pr view "$BRANCH" --json state --jq .state 2>/dev/null)" = "OPEN" ]; then
             gh pr edit "$BRANCH" --body-file "$RUNNER_TEMP/pr-body.md"
             echo "Updated the open PR."
           else
+            # The assignment is the notification: a failed scheduled run sends
+            # no mail anyone reads.
             gh pr create \
-              --base "${{ github.event.repository.default_branch }}" \
+              --base "$DEFAULT_BRANCH" \
               --head "$BRANCH" \
               --title "Sync the engine from the calculator, and regenerate the goldens" \
+              --assignee "$GITHUB_REPOSITORY_OWNER" \
               --body-file "$RUNNER_TEMP/pr-body.md"
           fi
+
+          # A push made with the job's token starts no workflow, so the `test`
+          # check would never appear on this pull request. Start it by hand: the
+          # deploy job of ci.yml runs on master only.
+          gh workflow run ci.yml --ref "$BRANCH" \
+            || echo "::warning::Could not start ci.yml on $BRANCH; run it from the Actions tab so the test check appears on the pull request."
+
+          echo "::error title=Sync not on $DEFAULT_BRANCH::$why. It waits in the pull request on $BRANCH."
+          exit 1

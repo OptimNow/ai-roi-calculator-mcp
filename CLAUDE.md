@@ -93,9 +93,9 @@ change detector, not a proof of correctness: when it fails, the diff is the blas
 
 Two workflows keep the copies honest. `ci.yml` runs the sync check against the calculator's
 main branch on every PR and push to master, so a red build means a human changed something.
-`sync-engine.yml` runs every Monday: it syncs, regenerates the goldens, and opens (or updates)
-a `chore/engine-sync` PR when the calculator moved on its own — typically the weekly price
-snapshot refresh — so routine upstream drift never turns CI red.
+`sync-engine.yml` runs every Monday: it syncs, regenerates the goldens, and, when only prices
+moved, pushes the result to master with a deploy key, so routine upstream drift never turns CI
+red. Anything else opens a `chore/engine-sync` PR and fails the run (docs/DESIGN.md, "Deployment").
 
 ## Model prices
 
